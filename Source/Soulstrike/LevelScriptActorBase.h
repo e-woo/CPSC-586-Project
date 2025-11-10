@@ -21,5 +21,6 @@ protected:
 	void BeginPlay() override;
 
 private:
-	FVector GetGroundLocation(float X, float Y, float MinZ, float MaxZ);
+	FVector GetGroundLocationAndNormal(FVector Origin, FVector Extent, FRotator& Rotation);
+	static float GetSlopeAngleDegrees(const FVector& Normal);
 };

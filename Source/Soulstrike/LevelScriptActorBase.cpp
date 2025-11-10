@@ -46,46 +46,74 @@ void ALevelScriptActorBase::SpawnChests(int32 ChestCount)
 	FVector Origin, Extent;
 	Landscape->GetActorBounds(false, Origin, Extent);
 
-	float MinDistanceFromOrigin = 8000.f;
-	int maxSpawnAttempts = 100;
 	for (int i = 0; i < ChestCount; i++)
 	{
-		for (int j = 0; j < maxSpawnAttempts; j++)
+		FRotator SpawnRotation;
+		FVector SpawnLocation = GetGroundLocationAndNormal(Origin, Extent, SpawnRotation);
+		FActorSpawnParameters SpawnParams;
+
+		//UE_LOG(LogTemp, Display, TEXT("Spawning chest at location: %s"), *SpawnLocation.ToString());
+
+		AActor* NewChest = GetWorld()->SpawnActor<AActor>(ChestActorClass, SpawnLocation, SpawnRotation, SpawnParams);
+		if (NewChest)
 		{
-			float RandomX = FMath::RandRange(Origin.X - Extent.X, Origin.X + Extent.X);
-			float RandomY = FMath::RandRange(Origin.Y - Extent.Y, Origin.Y + Extent.Y);
-			float RandomZ = FMath::RandRange(Origin.Z - Extent.Z, Origin.Z + Extent.Z);
-
-			if (FVector::Dist2D(FVector(RandomX, RandomY, 0.f), Origin) >= MinDistanceFromOrigin)
-			{
-				FVector SpawnLocation = GetGroundLocation(RandomX, RandomY, Origin.Z - Extent.Z, Origin.Z + Extent.Z);
-				FActorSpawnParameters SpawnParams;
-
-				//UE_LOG(LogTemp, Display, TEXT("Spawning chest at location: %s"), *SpawnLocation.ToString());
-
-				AActor* NewChest = GetWorld()->SpawnActor<AActor>(ChestActorClass, SpawnLocation, FRotator::ZeroRotator, SpawnParams);
-				if (NewChest)
-				{
-					NewChest->SetFolderPath("/Chests");
-				}
-				break;
-			}
+			NewChest->SetFolderPath("/Chests");
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Attempted to spawn chest at %s but failed."), *SpawnLocation.ToString());
 		}
 	}
 }
 
-FVector ALevelScriptActorBase::GetGroundLocation(float X, float Y, float MinZ, float MaxZ)
+FVector ALevelScriptActorBase::GetGroundLocationAndNormal(FVector Origin, FVector Extent, FRotator& Rotation)
 {
-	FVector High = FVector(X, Y, MaxZ);
-	FVector Low = FVector(X, Y, MinZ);
+	int MaxSpawnAttempts = 100;
+	float MinDistanceFromOrigin = 8000.f;
+	float MaxSlopeAngle = 30.f;
 
-	FHitResult HitResult;
-	FCollisionQueryParams Params;
-	Params.bTraceComplex = true;
-
-	if (GetWorld()->LineTraceSingleByChannel(HitResult, High, Low, ECC_Visibility, Params))
+	for (int i = 0; i < MaxSpawnAttempts; i++)
 	{
-		return HitResult.Location;
+		float RandomX = FMath::RandRange(Origin.X - Extent.X, Origin.X + Extent.X);
+		float RandomY = FMath::RandRange(Origin.Y - Extent.Y, Origin.Y + Extent.Y);
+
+		if (FVector::Dist2D(FVector(RandomX, RandomY, 0.f), Origin) < MinDistanceFromOrigin)
+		{
+			continue;
+		}
+
+		FVector High = FVector(RandomX, RandomY, Origin.Z + Extent.Z);
+		FVector Low = FVector(RandomX, RandomY, Origin.Z - Extent.Z);
+
+		FHitResult HitResult;
+		FCollisionQueryParams Params;
+		Params.bTraceComplex = true;
+
+		if (GetWorld()->LineTraceSingleByChannel(HitResult, High, Low, ECC_Visibility, Params))
+		{
+			FVector Normal = HitResult.Normal;
+
+			float SlopeAngle = GetSlopeAngleDegrees(Normal);
+			if (SlopeAngle > MaxSlopeAngle)  // Too steep
+			{
+				continue;
+			}
+
+			Rotation = FRotationMatrix::MakeFromXZ(FVector::ForwardVector, Normal).Rotator();
+			Rotation.Yaw += FMath::FRandRange(0.f, 360.f);
+
+			return HitResult.Location;
+		}
 	}
-    return FVector(X, Y, 0.f);
+
+	// Fallback
+	Rotation = FRotator::ZeroRotator;
+    return FVector(0, 0, 0.f);
+}
+
+float ALevelScriptActorBase::GetSlopeAngleDegrees(const FVector& Normal)
+{
+	float CosTheta = FVector::DotProduct(Normal, FVector::UpVector);
+	CosTheta = FMath::Clamp(CosTheta, -1.f, 1.f); // avoid NaN
+	return FMath::Acos(CosTheta) * (180.f / PI);
 }
