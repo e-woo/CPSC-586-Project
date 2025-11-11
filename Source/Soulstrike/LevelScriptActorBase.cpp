@@ -17,7 +17,7 @@ void ALevelScriptActorBase::BeginPlay()
 
 	if (ChestActorClass)
 	{
-		SpawnChests(50);
+		SpawnChests(30);
 	}
 	else
 	{
@@ -69,7 +69,7 @@ void ALevelScriptActorBase::SpawnChests(int32 ChestCount)
 FVector ALevelScriptActorBase::GetGroundLocationAndNormal(FVector Origin, FVector Extent, FRotator& Rotation)
 {
 	int MaxSpawnAttempts = 100;
-	float MinDistanceFromOrigin = 8000.f;
+	float MinDistanceFromOrigin = 12000.f;
 	float MaxSlopeAngle = 30.f;
 
 	for (int i = 0; i < MaxSpawnAttempts; i++)
