@@ -1,6 +1,7 @@
 #include "EliteGiant.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "RLComponent.h"
+#include "DirectorAI.h"
 #include "Kismet/GameplayStatics.h"
 
 AEliteGiant::AEliteGiant()
@@ -9,7 +10,7 @@ AEliteGiant::AEliteGiant()
 	MaxHealth = 250.0f;  // Very high health
 	Health = MaxHealth;
 	AttackDamage = 200.0f;  // Massive damage per hit
-	MaxAttackRange = 600.0f;// Melee range
+	MaxAttackRange = 600.0f;  // Melee range
 
 	// Giant attack timing: Slow devastating slams
 	AttackDuration = 0.1f;  // Slam impact
@@ -33,10 +34,15 @@ void AEliteGiant::PerformPrimaryAttack()
 		RLComp->RecordDamageDealt(AttackDamage);
 	}
 
-	// TODO: Player damage + AOE
+	// Get player and Director AI
 	ACharacter* Player = UGameplayStatics::GetPlayerCharacter(GetWorld(), 0);
-	if (Player)
+	ADirectorAI* Director = Cast<ADirectorAI>(
+		UGameplayStatics::GetActorOfClass(GetWorld(), ADirectorAI::StaticClass())
+	);
+
+	// Report damage to Director
+	if (Director && Player)
 	{
-		// Placeholder: Player->TakeDamageFromElite(AttackDamage, this);
+		Director->ReportDamageToPlayer(Player, AttackDamage, this);
 	}
 }
