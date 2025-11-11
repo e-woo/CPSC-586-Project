@@ -53,3 +53,19 @@ void ADirectorAI::Tick(float DeltaTime)
 
 	LastPlayerPosition = CurrentPlayerPosition;
 }
+
+void ADirectorAI::ReportDamageToPlayer(ACharacter* TargetPlayer, float Damage, AActor* DamageSource)
+{
+	if (!TargetPlayer)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("DirectorAI: Attempted to damage null player!"));
+		return;
+	}
+
+	// Log damage for debugging
+	FString SourceName = DamageSource ? DamageSource->GetName() : TEXT("Unknown");
+	UE_LOG(LogTemp, Log, TEXT("DirectorAI: %s dealt %.1f damage to player"), *SourceName, Damage);
+
+	// Broadcast event that Blueprint can listen to
+	OnDamagePlayerEvent.Broadcast(TargetPlayer, Damage, DamageSource);
+}

@@ -1,6 +1,7 @@
 #include "EliteAssassin.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "RLComponent.h"
+#include "DirectorAI.h"
 #include "Kismet/GameplayStatics.h"
 
 AEliteAssassin::AEliteAssassin()
@@ -34,24 +35,26 @@ void AEliteAssassin::PerformPrimaryAttack()
 	// Assassin melee + poison attack
 	UE_LOG(LogTemp, Log, TEXT("Assassin: Poisoned strike! (%.0f instant + 90 poison over 3s)"), AttackDamage);
 
-	// Get RLComponent
+	// Get components
 	URLComponent* RLComp = FindComponentByClass<URLComponent>();
+	ACharacter* Player = UGameplayStatics::GetPlayerCharacter(GetWorld(), 0);
+	ADirectorAI* Director = Cast<ADirectorAI>(
+		UGameplayStatics::GetActorOfClass(GetWorld(), ADirectorAI::StaticClass())
+	);
 
-	// Record instant damage
+	// Record and report instant damage
 	if (RLComp)
 	{
 		RLComp->RecordDamageDealt(AttackDamage);
 	}
 
+	if (Director && Player)
+	{
+		Director->ReportDamageToPlayer(Player, AttackDamage, this);
+	}
+
 	// Apply poison (90 damage over 3 seconds)
 	ApplyPoison(90.0f, 3.0f);
-
-	// TODO: Player damage
-	ACharacter* Player = UGameplayStatics::GetPlayerCharacter(GetWorld(), 0);
-	if (Player)
-	{
-		// Placeholder: Player->TakeDamageFromElite(AttackDamage, this, true, 3.0f);
-	}
 }
 
 void AEliteAssassin::ApplyPoison(float TotalDamage, float Duration)
@@ -68,6 +71,10 @@ void AEliteAssassin::ApplyPoison(float TotalDamage, float Duration)
 void AEliteAssassin::UpdatePoisons(float DeltaTime)
 {
 	URLComponent* RLComp = FindComponentByClass<URLComponent>();
+	ACharacter* Player = UGameplayStatics::GetPlayerCharacter(GetWorld(), 0);
+	ADirectorAI* Director = Cast<ADirectorAI>(
+		UGameplayStatics::GetActorOfClass(GetWorld(), ADirectorAI::StaticClass())
+	);
 
 	for (int32 i = ActivePoisons.Num() - 1; i >= 0; --i)
 	{
@@ -79,10 +86,16 @@ void AEliteAssassin::UpdatePoisons(float DeltaTime)
 		// Tick damage
 		if (Poison.TimeSinceLastTick >= Poison.TickInterval)
 		{
-			// Deal poison damage
+			// Record DPS for RL
 			if (RLComp)
 			{
 				RLComp->RecordDamageDealt(Poison.DamagePerTick);
+			}
+
+			// Report poison damage to Director
+			if (Director && Player)
+			{
+				Director->ReportDamageToPlayer(Player, Poison.DamagePerTick, this);
 			}
 			
 			Poison.TimeSinceLastTick = 0.0f;

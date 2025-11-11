@@ -1,6 +1,7 @@
 #include "EliteArcher.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "RLComponent.h"
+#include "DirectorAI.h"
 #include "Kismet/GameplayStatics.h"
 
 AEliteArcher::AEliteArcher()
@@ -34,11 +35,15 @@ void AEliteArcher::PerformPrimaryAttack()
 		RLComp->RecordDamageDealt(AttackDamage);
 	}
 
-	// TODO: Spawn projectile, play animation, etc.
-	// For now, we conceptually "deal damage" to player
+	// Get player and Director AI
 	ACharacter* Player = UGameplayStatics::GetPlayerCharacter(GetWorld(), 0);
-	if (Player)
+	ADirectorAI* Director = Cast<ADirectorAI>(
+		UGameplayStatics::GetActorOfClass(GetWorld(), ADirectorAI::StaticClass())
+	);
+
+	// Report damage to Director (which will forward to player Blueprint)
+	if (Director && Player)
 	{
-		// Placeholder: Player->TakeDamageFromElite(AttackDamage, this);
+		Director->ReportDamageToPlayer(Player, AttackDamage, this);
 	}
 }
