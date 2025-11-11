@@ -18,6 +18,19 @@ AElitePaladin::AElitePaladin()
 
 	// Movement
 	GetCharacterMovement()->MaxWalkSpeed = 350.0f; // Slow
+	
+	// Initialize cached reference
+	CachedDirector = nullptr;
+}
+
+void AElitePaladin::BeginPlay()
+{
+	Super::BeginPlay();
+	
+	// Cache DirectorAI reference during initialization
+	CachedDirector = Cast<ADirectorAI>(
+		UGameplayStatics::GetActorOfClass(GetWorld(), ADirectorAI::StaticClass())
+	);
 }
 
 void AElitePaladin::PerformPrimaryAttack()
@@ -34,15 +47,12 @@ void AElitePaladin::PerformPrimaryAttack()
 		RLComp->RecordDamageDealt(AttackDamage);
 	}
 
-	// Get player and Director AI
+	// Get player and use cached Director AI reference
 	ACharacter* Player = UGameplayStatics::GetPlayerCharacter(GetWorld(), 0);
-	ADirectorAI* Director = Cast<ADirectorAI>(
-		UGameplayStatics::GetActorOfClass(GetWorld(), ADirectorAI::StaticClass())
-	);
 
-	// Report damage to Director
-	if (Director && Player)
+	// Report damage to Director using cached reference
+	if (CachedDirector && Player)
 	{
-		Director->ReportDamageToPlayer(Player, AttackDamage, this);
+		CachedDirector->ReportDamageToPlayer(Player, AttackDamage, this);
 	}
 }
