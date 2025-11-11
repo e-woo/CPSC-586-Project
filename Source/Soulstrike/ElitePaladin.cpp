@@ -1,6 +1,7 @@
 #include "ElitePaladin.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "RLComponent.h"
+#include "DirectorAI.h"
 #include "Kismet/GameplayStatics.h"
 
 AElitePaladin::AElitePaladin()
@@ -33,10 +34,15 @@ void AElitePaladin::PerformPrimaryAttack()
 		RLComp->RecordDamageDealt(AttackDamage);
 	}
 
-	// TODO: Player damage
+	// Get player and Director AI
 	ACharacter* Player = UGameplayStatics::GetPlayerCharacter(GetWorld(), 0);
-	if (Player)
+	ADirectorAI* Director = Cast<ADirectorAI>(
+		UGameplayStatics::GetActorOfClass(GetWorld(), ADirectorAI::StaticClass())
+	);
+
+	// Report damage to Director
+	if (Director && Player)
 	{
-		// Placeholder: Player->TakeDamageFromElite(AttackDamage, this);
+		Director->ReportDamageToPlayer(Player, AttackDamage, this);
 	}
 }
