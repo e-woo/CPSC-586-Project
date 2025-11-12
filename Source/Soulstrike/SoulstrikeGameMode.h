@@ -4,11 +4,11 @@
 #include "GameFramework/GameModeBase.h"
 #include "SoulstrikeGameMode.generated.h"
 
-class ADirectorAI;
+class AEnemyLogicManager;
 
 /**
  * Main Game Mode for Soulstrike
- * Handles Director AI spawning and game logic
+ * Handles Enemy Logic Manager spawning and game logic
  */
 UCLASS()
 class SOULSTRIKE_API ASoulstrikeGameMode : public AGameModeBase
@@ -22,7 +22,7 @@ protected:
 	virtual void BeginPlay() override;
 
 private:
-	/** Reference to the spawned Director AI */
+	/** Reference to the spawned Enemy Logic Manager */
 	UPROPERTY()
-	ADirectorAI* DirectorAI;
+	AEnemyLogicManager* EnemyLogicManager;
 };

@@ -1,9 +1,9 @@
-#include "DirectorAI.h"
+#include "EnemyLogicManager.h"
 #include "SoulstrikeGameInstance.h"
 #include "GameFramework/Character.h"
 #include "Kismet/GameplayStatics.h"
 
-ADirectorAI::ADirectorAI()
+AEnemyLogicManager::AEnemyLogicManager()
 {
 	PrimaryActorTick.bCanEverTick = true;
 
@@ -12,7 +12,7 @@ ADirectorAI::ADirectorAI()
 	SetActorEnableCollision(false);
 }
 
-void ADirectorAI::BeginPlay()
+void AEnemyLogicManager::BeginPlay()
 {
 	Super::BeginPlay();
 
@@ -22,15 +22,15 @@ void ADirectorAI::BeginPlay()
 	if (PlayerCharacter)
 	{
 		LastPlayerPosition = PlayerCharacter->GetActorLocation();
-		UE_LOG(LogTemp, Log, TEXT("DirectorAI: Player character found and tracked."));
+		UE_LOG(LogTemp, Log, TEXT("EnemyLogicManager: Player character found and tracked."));
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("DirectorAI: Player character not found!"));
+		UE_LOG(LogTemp, Warning, TEXT("EnemyLogicManager: Player character not found!"));
 	}
 }
 
-void ADirectorAI::Tick(float DeltaTime)
+void AEnemyLogicManager::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
@@ -54,17 +54,17 @@ void ADirectorAI::Tick(float DeltaTime)
 	LastPlayerPosition = CurrentPlayerPosition;
 }
 
-void ADirectorAI::ReportDamageToPlayer(ACharacter* TargetPlayer, float Damage, AActor* DamageSource)
+void AEnemyLogicManager::ReportDamageToPlayer(ACharacter* TargetPlayer, float Damage, AActor* DamageSource)
 {
 	if (!TargetPlayer)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("DirectorAI: Attempted to damage null player!"));
+		UE_LOG(LogTemp, Warning, TEXT("EnemyLogicManager: Attempted to damage null player!"));
 		return;
 	}
 
 	// Log damage for debugging
 	FString SourceName = DamageSource ? DamageSource->GetName() : TEXT("Unknown");
-	UE_LOG(LogTemp, Log, TEXT("DirectorAI: %s dealt %.1f damage to player"), *SourceName, Damage);
+	UE_LOG(LogTemp, Log, TEXT("EnemyLogicManager: %s dealt %.1f damage to player"), *SourceName, Damage);
 
 	// Broadcast event that Blueprint can listen to
 	OnDamagePlayerEvent.Broadcast(TargetPlayer, Damage, DamageSource);
