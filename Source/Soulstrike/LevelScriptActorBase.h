@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Engine/LevelScriptActor.h"
+#include "GameFramework/Character.h"
 #include "LevelScriptActorBase.generated.h"
 
 /**
@@ -16,6 +17,7 @@ class SOULSTRIKE_API ALevelScriptActorBase : public ALevelScriptActor
 	
 public:
 	void SpawnChests(int32 ChestCount);
+	void TickDirector();
 
 protected:
 	void BeginPlay() override;
@@ -23,4 +25,12 @@ protected:
 private:
 	FVector GetGroundLocationAndNormal(FVector Origin, FVector Extent, FRotator& Rotation);
 	static float GetSlopeAngleDegrees(const FVector& Normal);
+
+	void ReceiveSpawnCredits();
+	void SpawnEnemies();
+
+	ACharacter* PlayerCharacter;
+
+	double StartTime;
+	int32 SpawnCredits = 10;
 };

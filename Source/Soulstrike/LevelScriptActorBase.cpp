@@ -23,6 +23,20 @@ void ALevelScriptActorBase::BeginPlay()
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Failed to load Chest actor class from path: %s"), *Path);
 	}
+
+	FTimerHandle DirectorTimerHandle;
+	FTimerDelegate DirectorDelegate;
+
+	DirectorDelegate.BindUObject(this, &ALevelScriptActorBase::TickDirector);
+	GetWorldTimerManager().SetTimer(DirectorTimerHandle, DirectorDelegate, 1.0f, true);
+
+	PlayerCharacter = UGameplayStatics::GetPlayerCharacter(GetWorld(), 0);
+	if (!PlayerCharacter)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Player character not found in LevelScriptActorBase."));
+	}
+
+	StartTime = FPlatformTime::Seconds();
 }
 
 void ALevelScriptActorBase::SpawnChests(int32 ChestCount)
@@ -116,4 +130,27 @@ float ALevelScriptActorBase::GetSlopeAngleDegrees(const FVector& Normal)
 	float CosTheta = FVector::DotProduct(Normal, FVector::UpVector);
 	CosTheta = FMath::Clamp(CosTheta, -1.f, 1.f); // avoid NaN
 	return FMath::Acos(CosTheta) * (180.f / PI);
+}
+
+void ALevelScriptActorBase::TickDirector()
+{
+	UE_LOG(LogTemp, Display, TEXT("TickEvent"));
+
+	ReceiveSpawnCredits();
+	SpawnEnemies();
+}
+
+void ALevelScriptActorBase::ReceiveSpawnCredits()
+{
+	UE_LOG(LogTemp, Display, TEXT("Received spawn credits. Total now: %d"), SpawnCredits);
+}
+
+void ALevelScriptActorBase::SpawnEnemies()
+{
+	int32 EnemyCost = 3;
+	while (SpawnCredits >= EnemyCost)
+	{
+		SpawnCredits -= EnemyCost;
+		UE_LOG(LogTemp, Display, TEXT("Spawned an enemy! Remaining credits: %d"), SpawnCredits);
+	}
 }
