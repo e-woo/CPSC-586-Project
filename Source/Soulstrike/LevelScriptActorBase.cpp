@@ -7,6 +7,8 @@
 #include "Landscape.h"
 #include "UObject/ConstructorHelpers.h"
 
+#include "EliteEnemy.h"
+
 TSubclassOf<AActor> ChestActorClass;
 
 void ALevelScriptActorBase::BeginPlay()
@@ -30,7 +32,7 @@ void ALevelScriptActorBase::BeginPlay()
 	DirectorDelegate.BindUObject(this, &ALevelScriptActorBase::TickDirector);
 	GetWorldTimerManager().SetTimer(DirectorTimerHandle, DirectorDelegate, 1.0f, true);
 
-	PlayerCharacter = UGameplayStatics::GetPlayerCharacter(GetWorld(), 0);
+	PlayerCharacter = Cast<ACharacterBase>(UGameplayStatics::GetPlayerCharacter(GetWorld(), 0));
 	if (!PlayerCharacter)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Player character not found in LevelScriptActorBase."));
@@ -138,19 +140,27 @@ void ALevelScriptActorBase::TickDirector()
 
 	ReceiveSpawnCredits();
 	SpawnEnemies();
+	UE_LOG(LogTemp, Display, TEXT("Current credit count: %d"), SpawnCredits);
 }
 
 void ALevelScriptActorBase::ReceiveSpawnCredits()
 {
-	UE_LOG(LogTemp, Display, TEXT("Received spawn credits. Total now: %d"), SpawnCredits);
+	float Multiplier = 1.f;
+
+	Multiplier += (FPlatformTime::Seconds() - StartTime) / 60.f;
+	Multiplier *= PlayerCharacter->CurrentHP / PlayerCharacter->MaxHP;
+
+	TArray<AActor*> EliteEnemyActors;
+	UGameplayStatics::GetAllActorsOfClass(GetWorld(), AEliteEnemy::StaticClass(), EliteEnemyActors);
+
+	Multiplier *= (1 - 0.16f * EliteEnemyActors.Num());
+
+	//UE_LOG(LogTemp, Display, TEXT("Current credit multiplier: %f"), Multiplier);
+
+	SpawnCredits += FMath::RoundToInt(BaseCreditAmountToReceive * Multiplier);
 }
 
 void ALevelScriptActorBase::SpawnEnemies()
 {
-	int32 EnemyCost = 3;
-	while (SpawnCredits >= EnemyCost)
-	{
-		SpawnCredits -= EnemyCost;
-		UE_LOG(LogTemp, Display, TEXT("Spawned an enemy! Remaining credits: %d"), SpawnCredits);
-	}
+	// TODO: Enemy spawn logic
 }

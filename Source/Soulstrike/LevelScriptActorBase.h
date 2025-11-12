@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include "CharacterBase.h"
+
 #include "CoreMinimal.h"
 #include "Engine/LevelScriptActor.h"
 #include "GameFramework/Character.h"
@@ -29,8 +31,9 @@ private:
 	void ReceiveSpawnCredits();
 	void SpawnEnemies();
 
-	ACharacter* PlayerCharacter;
+	ACharacterBase* PlayerCharacter;
 
 	double StartTime;
 	int32 SpawnCredits = 10;
+	int32 BaseCreditAmountToReceive = 10;
 };
