@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
-#include "DirectorAI.generated.h"
+#include "EnemyLogicManager.generated.h"
 
 /**
  * Delegate for when Elite deals damage to player
@@ -14,16 +14,16 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnDamagePlayerEvent,
 	AActor*, DamageSource);
 
 /**
- * Director AI - Global manager that tracks the player and broadcasts information to all enemies.
+ * Enemy Logic Manager - Global manager that tracks the player and broadcasts information to all enemies.
  * Also handles combat events like damage reporting.
  */
 UCLASS(NotPlaceable, NotBlueprintable)
-class SOULSTRIKE_API ADirectorAI : public AActor
+class SOULSTRIKE_API AEnemyLogicManager : public AActor
 {
 	GENERATED_BODY()
 	
 public:	
-	ADirectorAI();
+	AEnemyLogicManager();
 
 protected:
 	virtual void BeginPlay() override;

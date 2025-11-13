@@ -1,28 +1,28 @@
 #include "SoulstrikeGameMode.h"
-#include "DirectorAI.h"
+#include "EnemyLogicManager.h"
 
 ASoulstrikeGameMode::ASoulstrikeGameMode()
 {
-	DirectorAI = nullptr;
+	EnemyLogicManager = nullptr;
 }
 
 void ASoulstrikeGameMode::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Spawn Director AI
+	// Spawn Enemy Logic Manager
 	FActorSpawnParameters SpawnParams;
-	SpawnParams.Name = FName(TEXT("DirectorAI"));
+	SpawnParams.Name = FName(TEXT("EnemyLogicManager"));
 	SpawnParams.Owner = this;
 
-	DirectorAI = GetWorld()->SpawnActor<ADirectorAI>(ADirectorAI::StaticClass(), FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams);
+	EnemyLogicManager = GetWorld()->SpawnActor<AEnemyLogicManager>(AEnemyLogicManager::StaticClass(), FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams);
 
-	if (DirectorAI)
+	if (EnemyLogicManager)
 	{
-		UE_LOG(LogTemp, Log, TEXT("SoulstrikeGameMode: Director AI spawned successfully."));
+		UE_LOG(LogTemp, Log, TEXT("SoulstrikeGameMode: Enemy Logic Manager spawned successfully."));
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("SoulstrikeGameMode: Failed to spawn Director AI!"));
+		UE_LOG(LogTemp, Error, TEXT("SoulstrikeGameMode: Failed to spawn Enemy Logic Manager!"));
 	}
 }

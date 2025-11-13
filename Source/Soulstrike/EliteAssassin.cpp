@@ -1,7 +1,7 @@
 #include "EliteAssassin.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "RLComponent.h"
-#include "DirectorAI.h"
+#include "EnemyLogicManager.h"
 #include "Kismet/GameplayStatics.h"
 
 AEliteAssassin::AEliteAssassin()
@@ -38,8 +38,8 @@ void AEliteAssassin::PerformPrimaryAttack()
 	// Get components
 	URLComponent* RLComp = FindComponentByClass<URLComponent>();
 	ACharacter* Player = UGameplayStatics::GetPlayerCharacter(GetWorld(), 0);
-	ADirectorAI* Director = Cast<ADirectorAI>(
-		UGameplayStatics::GetActorOfClass(GetWorld(), ADirectorAI::StaticClass())
+	AEnemyLogicManager* EnemyLogicMgr = Cast<AEnemyLogicManager>(
+		UGameplayStatics::GetActorOfClass(GetWorld(), AEnemyLogicManager::StaticClass())
 	);
 
 	// Record and report instant damage
@@ -48,9 +48,9 @@ void AEliteAssassin::PerformPrimaryAttack()
 		RLComp->RecordDamageDealt(AttackDamage);
 	}
 
-	if (Director && Player)
+	if (EnemyLogicMgr && Player)
 	{
-		Director->ReportDamageToPlayer(Player, AttackDamage, this);
+		EnemyLogicMgr->ReportDamageToPlayer(Player, AttackDamage, this);
 	}
 
 	// Apply poison (90 damage over 3 seconds)
@@ -72,8 +72,8 @@ void AEliteAssassin::UpdatePoisons(float DeltaTime)
 {
 	URLComponent* RLComp = FindComponentByClass<URLComponent>();
 	ACharacter* Player = UGameplayStatics::GetPlayerCharacter(GetWorld(), 0);
-	ADirectorAI* Director = Cast<ADirectorAI>(
-		UGameplayStatics::GetActorOfClass(GetWorld(), ADirectorAI::StaticClass())
+	AEnemyLogicManager* EnemyLogicMgr = Cast<AEnemyLogicManager>(
+		UGameplayStatics::GetActorOfClass(GetWorld(), AEnemyLogicManager::StaticClass())
 	);
 
 	for (int32 i = ActivePoisons.Num() - 1; i >= 0; --i)
@@ -92,10 +92,10 @@ void AEliteAssassin::UpdatePoisons(float DeltaTime)
 				RLComp->RecordDamageDealt(Poison.DamagePerTick);
 			}
 
-			// Report poison damage to Director
-			if (Director && Player)
+			// Report poison damage to Enemy Logic Manager
+			if (EnemyLogicMgr && Player)
 			{
-				Director->ReportDamageToPlayer(Player, Poison.DamagePerTick, this);
+				EnemyLogicMgr->ReportDamageToPlayer(Player, Poison.DamagePerTick, this);
 			}
 			
 			Poison.TimeSinceLastTick = 0.0f;
