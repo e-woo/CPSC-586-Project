@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Engine/LevelScriptActor.h"
+#include "GameFramework/Character.h"
 #include "LevelScriptActorBase.generated.h"
 
 /**
@@ -19,8 +20,4 @@ public:
 
 protected:
 	void BeginPlay() override;
-
-private:
-	FVector GetGroundLocationAndNormal(FVector Origin, FVector Extent, FRotator& Rotation);
-	static float GetSlopeAngleDegrees(const FVector& Normal);
 };
