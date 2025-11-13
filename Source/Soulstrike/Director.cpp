@@ -5,21 +5,16 @@
 #include <Kismet/GameplayStatics.h>
 
 #include "EliteEnemy.h"
+#include "Util/Spawn.h"
+#include "Util/LoadBP.h"
+
+TSubclassOf<AActor> EnemyActorClass;
 
 // Sets default values
 ADirector::ADirector()
 {
  	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
-
-}
-
-// Called when the game starts or when spawned
-void ADirector::BeginPlay()
-{
-	Super::BeginPlay();
-
-
 	PlayerCharacter = Cast<ACharacterBase>(UGameplayStatics::GetPlayerCharacter(GetWorld(), 0));
 	if (!PlayerCharacter)
 	{
@@ -27,6 +22,12 @@ void ADirector::BeginPlay()
 	}
 
 	StartTime = FPlatformTime::Seconds();
+}
+
+// Called when the game starts or when spawned
+void ADirector::BeginPlay()
+{
+	Super::BeginPlay();
 
 	FTimerHandle DirectorTimerHandle;
 	FTimerDelegate DirectorDelegate;
@@ -41,21 +42,6 @@ void ADirector::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-}
-
-template <typename T>
-void ADirector::LoadClass(const std::string& Path, TSubclassOf<T>& SubClass)
-{
-	static_assert(std::is_base_of<UObject, T>::value);
-	FString LPath(Path.c_str());
-
-	UClass* LoadedClass = StaticLoadClass(T::StaticClass(), nullptr, *LPath);
-	SubClass = LoadedClass;
-
-	if (!SubClass)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Failed to load class from path: %s"), *LPath);
-	}
 }
 
 void ADirector::TickDirector()
@@ -102,20 +88,23 @@ void ADirector::SpawnEnemies()
 
 	float RandomX = FMath::RandRange(PlayerLocation.X - Extent.X, PlayerLocation.X + Extent.X);
 	float RandomY = FMath::RandRange(PlayerLocation.Y - Extent.Y, PlayerLocation.Y + Extent.Y);
-	//for (int i = 0; i < EnemiesToSpawn; i++)
-	//{
-	//	FRotator SpawnRotation;
-	//	FVector SpawnLocation = GetGroundLocationAndNormal(PlayerLocation, Extent, 3000.f, 30.f, SpawnRotation);
-	//	FActorSpawnParameters SpawnParams;
 
-	//	AActor* NewEnemy = GetWorld()->SpawnActor<AActor>(ChestActorClass, SpawnLocation, SpawnRotation, SpawnParams);
-	//	if (NewEnemy)
-	//	{
-	//		NewEnemy->SetFolderPath("/SwarmEnemies");
-	//	}
-	//	else
-	//	{
-	//		UE_LOG(LogTemp, Warning, TEXT("Attempted to spawn enemy at %s but failed."), *SpawnLocation.ToString());
-	//	}
-	//}
+	UWorld* World = GetWorld();
+	for (int i = 0; i < EnemiesToSpawn; i++)
+	{
+		
+		//FRotator SpawnRotation;
+		//FVector SpawnLocation = GetGroundLocationAndNormal(PlayerLocation, Extent, 3000.f, 30.f, SpawnRotation);
+		//FActorSpawnParameters SpawnParams;
+
+		//AActor* NewEnemy = Spawn::SpawnActor(World, Enemy)
+		//if (NewEnemy)
+		//{
+		//	NewEnemy->SetFolderPath("/SwarmEnemies");
+		//}
+		//else
+		//{
+		//	UE_LOG(LogTemp, Warning, TEXT("Attempted to spawn enemy at %s but failed."), *SpawnLocation.ToString());
+		//}
+	}
 }

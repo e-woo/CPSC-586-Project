@@ -2,8 +2,6 @@
 
 #pragma once
 
-#include <string>
-
 #include "CharacterBase.h"
 
 #include "CoreMinimal.h"
@@ -24,8 +22,4 @@ public:
 
 protected:
 	void BeginPlay() override;
-
-private:
-	template <typename T>
-	void LoadClass(const std::string& Path, TSubclassOf<T>& SubClass);
 };

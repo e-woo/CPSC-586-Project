@@ -2,8 +2,6 @@
 
 #pragma once
 
-#include <string>
-
 #include "CharacterBase.h"
 
 #include "CoreMinimal.h"
@@ -29,8 +27,6 @@ public:
 	void TickDirector();
 
 private:
-	template <typename T>
-	void LoadClass(const std::string& Path, TSubclassOf<T>& SubClass);
 
 	void ReceiveSpawnCredits();
 	void SpawnEnemies();

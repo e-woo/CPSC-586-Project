@@ -1,6 +1,5 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
-#include "Spawn.h"
 
 #include "LevelScriptActorBase.h"
 #include "Kismet/GameplayStatics.h"
@@ -8,35 +7,19 @@
 #include "Landscape.h"
 #include "UObject/ConstructorHelpers.h"
 
+#include "Util/LoadBP.h"
+#include "Util/Spawn.h"
 TSubclassOf<AActor> ChestActorClass;
-
-TSubclassOf<AActor> EnemyActorClass;
 
 void ALevelScriptActorBase::BeginPlay()
 {
 	Super::BeginPlay();
 
-	LoadClass("/Game/Interaction/BP_Chest.BP_Chest_C", ChestActorClass);
-	LoadClass("/Game/Enemy/BP_Enemy.BP_Enemy_C", EnemyActorClass);
+	LoadBP::LoadClass("/Game/Interaction/BP_Chest.BP_Chest_C", ChestActorClass);
 
 	if (ChestActorClass)
 	{
 		SpawnChests(30);
-	}
-}
-
-template <typename T>
-void ALevelScriptActorBase::LoadClass(const std::string& Path, TSubclassOf<T>& SubClass)
-{
-	static_assert(std::is_base_of<UObject, T>::value);
-	FString LPath(Path.c_str());
-
-	UClass* LoadedClass = StaticLoadClass(T::StaticClass(), nullptr, *LPath);
-	SubClass = LoadedClass;
-
-	if (!SubClass)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Failed to load class from path: %s"), *LPath);
 	}
 }
 
