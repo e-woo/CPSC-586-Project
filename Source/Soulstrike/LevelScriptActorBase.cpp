@@ -49,7 +49,7 @@ void ALevelScriptActorBase::SpawnChests(int32 ChestCount)
 	{
 		FActorSpawnParameters SpawnParams;
 
-		AActor* NewChest = Spawn::SpawnActor(World, ChestActorClass, Origin, Extent, 12000.f, 30.f, SpawnParams);
+		AActor* NewChest = Spawn::SpawnActor(World, ChestActorClass, Origin, Extent, 12000.f, 30.f, true, SpawnParams);
 		if (NewChest)
 		{
 			NewChest->SetFolderPath("/Chests");

@@ -3,17 +3,22 @@
 
 #include "Spawn.h"
 
-AActor* Spawn::SpawnActor(UWorld* World, UClass* Class, const FVector Origin, const FVector Extent, const float MinDistanceFromOrigin, const float MaxSlopeAngle, const FActorSpawnParameters& SpawnParams)
+AActor* Spawn::SpawnActor(UWorld* World, UClass* Class, const FVector Origin, const FVector Extent, const float MinDistanceFromOrigin, const float MaxSlopeAngle, const bool Rotate, const FActorSpawnParameters& SpawnParams)
 {
-	return SpawnActor(World, Class, Origin, Extent, MinDistanceFromOrigin, MaxSlopeAngle, SpawnParams, FVector(0, 0, 0));
+	return SpawnActor(World, Class, Origin, Extent, MinDistanceFromOrigin, MaxSlopeAngle, Rotate, SpawnParams, FVector(0, 0, 0));
 }
 
-AActor* Spawn::SpawnActor(UWorld* World, UClass* Class, const FVector Origin, const FVector Extent, const float MinDistanceFromOrigin, const float MaxSlopeAngle, const FActorSpawnParameters& SpawnParams, FVector SpawnOffset)
+AActor* Spawn::SpawnActor(UWorld* World, UClass* Class, const FVector Origin, const FVector Extent, const float MinDistanceFromOrigin, const float MaxSlopeAngle, const bool Rotate, const FActorSpawnParameters& SpawnParams, FVector SpawnOffset)
 {
-	FRotator _, SpawnRotation;
-	FVector SpawnLocation = GetGroundLocationAndNormal(World, Origin, Extent, MinDistanceFromOrigin, MaxSlopeAngle, _);
+	FRotator SpawnRotation;
+	FVector SpawnLocation = GetGroundLocationAndNormal(World, Origin, Extent, MinDistanceFromOrigin, MaxSlopeAngle, SpawnRotation);
 
-	SpawnRotation.Yaw += FMath::FRandRange(0.f, 360.f);
+	if (!Rotate)
+	{
+		SpawnRotation = FRotator::ZeroRotator;
+		SpawnRotation.Yaw += FMath::FRandRange(0.f, 360.f);
+	}
+
 	SpawnLocation += SpawnOffset;
 	UE_LOG(LogTemp, Display, TEXT("Spawning at: %f, %f, %f"), SpawnLocation.X, SpawnLocation.Y, SpawnLocation.Z);
 	AActor* NewActor = World->SpawnActor<AActor>(Class, SpawnLocation, SpawnRotation, SpawnParams);

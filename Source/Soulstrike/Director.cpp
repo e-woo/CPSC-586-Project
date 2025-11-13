@@ -89,7 +89,7 @@ void ADirector::SpawnEnemies()
 	{
 		FActorSpawnParameters SpawnParams;
 
-		AActor* NewEnemy = Spawn::SpawnActor(World, EnemyActorClass, SpawnLocation, FVector(500.f, 500.f, 10000.f), 0, 60.f, SpawnParams, FVector(0, 0, 100));
+		AActor* NewEnemy = Spawn::SpawnActor(World, EnemyActorClass, SpawnLocation, FVector(500.f, 500.f, 10000.f), 0, 60.f, false, SpawnParams, FVector(0, 0, 100));
 		if (NewEnemy)
 		{
 			NewEnemy->SetFolderPath("/SwarmEnemies");
