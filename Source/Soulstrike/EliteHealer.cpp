@@ -1,7 +1,7 @@
 #include "EliteHealer.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "RLComponent.h"
-#include "DirectorAI.h"
+#include "EnemyLogicManager.h"
 #include "Kismet/GameplayStatics.h"
 
 AEliteHealer::AEliteHealer()
@@ -37,16 +37,16 @@ void AEliteHealer::PerformPrimaryAttack()
 		RLComp->RecordDamageDealt(AttackDamage);
 	}
 
-	// Get player and Director AI
+	// Get player and Enemy Logic Manager
 	ACharacter* Player = UGameplayStatics::GetPlayerCharacter(GetWorld(), 0);
-	ADirectorAI* Director = Cast<ADirectorAI>(
-		UGameplayStatics::GetActorOfClass(GetWorld(), ADirectorAI::StaticClass())
+	AEnemyLogicManager* EnemyLogicMgr = Cast<AEnemyLogicManager>(
+		UGameplayStatics::GetActorOfClass(GetWorld(), AEnemyLogicManager::StaticClass())
 	);
 
-	// Report damage to Director
-	if (Director && Player)
+	// Report damage to Enemy Logic Manager
+	if (EnemyLogicMgr && Player)
 	{
-		Director->ReportDamageToPlayer(Player, AttackDamage, this);
+		EnemyLogicMgr->ReportDamageToPlayer(Player, AttackDamage, this);
 	}
 }
 
