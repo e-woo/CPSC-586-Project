@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <string>
+
 #include "CharacterBase.h"
 
 #include "CoreMinimal.h"
@@ -25,6 +27,11 @@ protected:
 	void BeginPlay() override;
 
 private:
+	template <typename T>
+	void LoadClass(const std::string& Path, TSubclassOf<T>& SubClass);
+
+	void StartDirector();
+
 	FVector GetGroundLocationAndNormal(FVector Origin, FVector Extent, FRotator& Rotation);
 	static float GetSlopeAngleDegrees(const FVector& Normal);
 

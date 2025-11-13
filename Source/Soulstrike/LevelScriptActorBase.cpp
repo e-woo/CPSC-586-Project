@@ -11,26 +11,19 @@
 
 TSubclassOf<AActor> ChestActorClass;
 
+TSubclassOf<AActor> EnemyActorClass;
+
 void ALevelScriptActorBase::BeginPlay()
 {
 	Super::BeginPlay();
-	FString Path = TEXT("/Game/Interaction/BP_Chest.BP_Chest_C");
-	ChestActorClass = Cast<UClass>(StaticLoadClass(AActor::StaticClass(), nullptr, *Path));
+
+	LoadClass("/Game/Interaction/BP_Chest.BP_Chest_C", ChestActorClass);
+	LoadClass("/Game/Enemy/BP_Enemy.BP_Enemy_C", EnemyActorClass);
 
 	if (ChestActorClass)
 	{
 		SpawnChests(30);
 	}
-	else
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Failed to load Chest actor class from path: %s"), *Path);
-	}
-
-	FTimerHandle DirectorTimerHandle;
-	FTimerDelegate DirectorDelegate;
-
-	DirectorDelegate.BindUObject(this, &ALevelScriptActorBase::TickDirector);
-	GetWorldTimerManager().SetTimer(DirectorTimerHandle, DirectorDelegate, 1.0f, true);
 
 	PlayerCharacter = Cast<ACharacterBase>(UGameplayStatics::GetPlayerCharacter(GetWorld(), 0));
 	if (!PlayerCharacter)
@@ -38,7 +31,32 @@ void ALevelScriptActorBase::BeginPlay()
 		UE_LOG(LogTemp, Warning, TEXT("Player character not found in LevelScriptActorBase."));
 	}
 
+	StartDirector();
 	StartTime = FPlatformTime::Seconds();
+}
+
+template <typename T>
+void ALevelScriptActorBase::LoadClass(const std::string& Path, TSubclassOf<T>& SubClass)
+{
+	static_assert(std::is_base_of<UObject, T>::value);
+	FString LPath(Path.c_str());
+
+	UClass* LoadedClass = StaticLoadClass(T::StaticClass(), nullptr, *LPath);
+	SubClass = LoadedClass;
+
+	if (!SubClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Failed to load class from path: %s"), *LPath);
+	}
+}
+
+void ALevelScriptActorBase::StartDirector()
+{
+	FTimerHandle DirectorTimerHandle;
+	FTimerDelegate DirectorDelegate;
+
+	DirectorDelegate.BindUObject(this, &ALevelScriptActorBase::TickDirector);
+	GetWorldTimerManager().SetTimer(DirectorTimerHandle, DirectorDelegate, 1.0f, true);
 }
 
 void ALevelScriptActorBase::SpawnChests(int32 ChestCount)
@@ -139,7 +157,11 @@ void ALevelScriptActorBase::TickDirector()
 	UE_LOG(LogTemp, Display, TEXT("TickEvent"));
 
 	ReceiveSpawnCredits();
-	SpawnEnemies();
+	if (FMath::RandRange(1, 100) <= 5)
+	{
+		SpawnEnemies();
+		UE_LOG(LogTemp, Display, TEXT("Spawning enemies this tick."));
+	}
 	UE_LOG(LogTemp, Display, TEXT("Current credit count: %d"), SpawnCredits);
 }
 
@@ -162,5 +184,5 @@ void ALevelScriptActorBase::ReceiveSpawnCredits()
 
 void ALevelScriptActorBase::SpawnEnemies()
 {
-	// TODO: Enemy spawn logic
+
 }
