@@ -21,7 +21,6 @@ class SOULSTRIKE_API ALevelScriptActorBase : public ALevelScriptActor
 	
 public:
 	void SpawnChests(int32 ChestCount);
-	void TickDirector();
 
 protected:
 	void BeginPlay() override;
@@ -29,18 +28,4 @@ protected:
 private:
 	template <typename T>
 	void LoadClass(const std::string& Path, TSubclassOf<T>& SubClass);
-
-	void StartDirector();
-
-	FVector GetGroundLocationAndNormal(FVector Origin, FVector Extent, FRotator& Rotation);
-	static float GetSlopeAngleDegrees(const FVector& Normal);
-
-	void ReceiveSpawnCredits();
-	void SpawnEnemies();
-
-	ACharacterBase* PlayerCharacter;
-
-	double StartTime;
-	int32 SpawnCredits = 10;
-	int32 BaseCreditAmountToReceive = 10;
 };
