@@ -15,13 +15,6 @@ ADirector::ADirector()
 {
  	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
-	PlayerCharacter = Cast<ACharacterBase>(UGameplayStatics::GetPlayerCharacter(GetWorld(), 0));
-	if (!PlayerCharacter)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Player character not found in LevelScriptActorBase."));
-	}
-
-	StartTime = FPlatformTime::Seconds();
 }
 
 // Called when the game starts or when spawned
@@ -29,12 +22,20 @@ void ADirector::BeginPlay()
 {
 	Super::BeginPlay();
 
+	PlayerCharacter = Cast<ACharacterBase>(UGameplayStatics::GetPlayerCharacter(GetWorld(), 0));
+	if (!PlayerCharacter)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Player character not found in LevelScriptActorBase."));
+	}
+
+
 	FTimerHandle DirectorTimerHandle;
 	FTimerDelegate DirectorDelegate;
 
 	DirectorDelegate.BindUObject(this, &ADirector::TickDirector);
 	GetWorldTimerManager().SetTimer(DirectorTimerHandle, DirectorDelegate, 1.0f, true);
-	
+
+	StartTime = FPlatformTime::Seconds();
 }
 
 // Called every frame
