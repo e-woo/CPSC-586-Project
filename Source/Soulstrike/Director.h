@@ -30,7 +30,7 @@ private:
 
 	void ReceiveSpawnCredits();
 	void SpawnEnemies();
-	FVector ChooseEnemySpawnLocation(FVector Origin, FVector Extent, float MinDistanceFromOrigin, float MaxSlopeAngle);
+	FVector ChooseEnemySpawnLocation(FVector Origin, float Radius, float MinDistance);
 
 	ACharacterBase* PlayerCharacter;
 

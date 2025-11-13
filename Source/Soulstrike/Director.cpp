@@ -28,6 +28,7 @@ void ADirector::BeginPlay()
 		UE_LOG(LogTemp, Warning, TEXT("Player character not found in LevelScriptActorBase."));
 	}
 
+	LoadBP::LoadClass("/Game/Enemy/BP_Enemy.BP_Enemy_C", EnemyActorClass);
 
 	FTimerHandle DirectorTimerHandle;
 	FTimerDelegate DirectorDelegate;
@@ -50,10 +51,9 @@ void ADirector::TickDirector()
 	UE_LOG(LogTemp, Display, TEXT("TickEvent"));
 
 	ReceiveSpawnCredits();
-	if (FMath::RandRange(1, 100) <= 5)
+	if (FMath::RandRange(1, 100) <= 50)
 	{
 		SpawnEnemies();
-		UE_LOG(LogTemp, Display, TEXT("Spawning enemies this tick."));
 	}
 	UE_LOG(LogTemp, Display, TEXT("Current credit count: %d"), SpawnCredits);
 }
@@ -77,35 +77,55 @@ void ADirector::ReceiveSpawnCredits()
 
 void ADirector::SpawnEnemies()
 {
-	if (FMath::RandRange(1, 100) > 5)
-	{
-		return;
-	}
-
 	int EnemiesToSpawn = FMath::RandRange(1, SpawnCredits);
+	UE_LOG(LogTemp, Display, TEXT("Spawning %d enemies."), EnemiesToSpawn);
 	float SpawnRadius = 6000.f;
 	FVector PlayerLocation = PlayerCharacter->GetActorLocation();
-	FVector Extent = FVector(SpawnRadius, SpawnRadius, 0.f);
 
-	float RandomX = FMath::RandRange(PlayerLocation.X - Extent.X, PlayerLocation.X + Extent.X);
-	float RandomY = FMath::RandRange(PlayerLocation.Y - Extent.Y, PlayerLocation.Y + Extent.Y);
+	FVector SpawnLocation = ChooseEnemySpawnLocation(PlayerLocation, SpawnRadius, 3000.f);
 
 	UWorld* World = GetWorld();
 	for (int i = 0; i < EnemiesToSpawn; i++)
 	{
-		
-		//FRotator SpawnRotation;
-		//FVector SpawnLocation = GetGroundLocationAndNormal(PlayerLocation, Extent, 3000.f, 30.f, SpawnRotation);
-		//FActorSpawnParameters SpawnParams;
+		FActorSpawnParameters SpawnParams;
 
-		//AActor* NewEnemy = Spawn::SpawnActor(World, Enemy)
-		//if (NewEnemy)
-		//{
-		//	NewEnemy->SetFolderPath("/SwarmEnemies");
-		//}
-		//else
-		//{
-		//	UE_LOG(LogTemp, Warning, TEXT("Attempted to spawn enemy at %s but failed."), *SpawnLocation.ToString());
-		//}
+		AActor* NewEnemy = Spawn::SpawnActor(World, EnemyActorClass, SpawnLocation, FVector(500.f, 500.f, 10000.f), 0, 60.f, SpawnParams, FVector(0, 0, 100));
+		if (NewEnemy)
+		{
+			NewEnemy->SetFolderPath("/SwarmEnemies");
+		}
 	}
+	SpawnCredits -= EnemiesToSpawn;
+}
+
+FVector ADirector::ChooseEnemySpawnLocation(FVector Origin, float Radius, float MinDistance)
+{
+	int MaxSpawnAttempts = 100;
+
+	UWorld* World = GetWorld();
+
+	for (int i = 0; i < MaxSpawnAttempts; i++)
+	{
+		float RandomX = FMath::RandRange(Origin.X - Radius, Origin.X + Radius);
+		float RandomY = FMath::RandRange(Origin.Y - Radius, Origin.Y + Radius);
+
+		if (FVector::Dist2D(FVector(RandomX, RandomY, 0.f), Origin) < MinDistance)
+		{
+			continue;
+		}
+
+		FVector High = FVector(RandomX, RandomY, Origin.Z + 10000.f);
+		FVector Low = FVector(RandomX, RandomY, 0);
+
+		FHitResult HitResult;
+		FCollisionQueryParams Params;
+		Params.bTraceComplex = true;
+
+		if (World->LineTraceSingleByChannel(HitResult, High, Low, ECC_Visibility, Params))
+		{
+			return HitResult.Location;
+		}
+	}
+
+	return FVector(0, 0, 0);
 }

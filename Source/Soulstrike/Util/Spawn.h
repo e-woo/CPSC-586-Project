@@ -2,8 +2,8 @@
 
 #pragma once
 
+#include "GameFramework/Actor.h"
 #include "CoreMinimal.h"
-
 /**
  * 
  */
@@ -12,7 +12,8 @@ class SOULSTRIKE_API Spawn
 public:
 	Spawn() = delete;
 
-	static AActor* SpawnActor(UWorld* World, UClass* Class, const FVector Origin, const FVector Extent, const float MinDistanceFromOrigin, const float MaxSlopeAngle, const FActorSpawnParameters& spawnParams);
+	static AActor* SpawnActor(UWorld* World, UClass* Class, const FVector Origin, const FVector Extent, const float MinDistanceFromOrigin, const float MaxSlopeAngle, const FActorSpawnParameters& SpawnParams);
+	static AActor* SpawnActor(UWorld* World, UClass* Class, const FVector Origin, const FVector Extent, const float MinDistanceFromOrigin, const float MaxSlopeAngle, const FActorSpawnParameters& SpawnParams, FVector SpawnOffset);
 
 private:
 	static FVector GetGroundLocationAndNormal(UWorld* World, FVector Origin, FVector Extent, float MinDistanceFromOrigin, float MaxSlopeAngle, FRotator& Rotation);

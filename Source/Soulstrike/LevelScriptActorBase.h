@@ -2,8 +2,6 @@
 
 #pragma once
 
-#include "CharacterBase.h"
-
 #include "CoreMinimal.h"
 #include "Engine/LevelScriptActor.h"
 #include "GameFramework/Character.h"
