@@ -29,12 +29,17 @@ public:
 private:
 
 	void ReceiveSpawnCredits();
-	void SpawnEnemies();
+	void SpawnSwarmEnemies();
 	FVector ChooseEnemySpawnLocation(FVector Origin, float Radius, float MinDistance);
 
 	ACharacterBase* PlayerCharacter;
 
 	double StartTime;
-	int32 SpawnCredits = 10;
+	int32 TickNum = 0;
+	int32 SpawnChanceBonus = 0;
+
+	int32 SpawnCredits = 50;
 	int32 BaseCreditAmountToReceive = 10;
+
+	int32 SwarmPackNum = 0;
 };

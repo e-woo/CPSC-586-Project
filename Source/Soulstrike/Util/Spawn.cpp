@@ -20,7 +20,6 @@ AActor* Spawn::SpawnActor(UWorld* World, UClass* Class, const FVector Origin, co
 	}
 
 	SpawnLocation += SpawnOffset;
-	UE_LOG(LogTemp, Display, TEXT("Spawning at: %f, %f, %f"), SpawnLocation.X, SpawnLocation.Y, SpawnLocation.Z);
 	AActor* NewActor = World->SpawnActor<AActor>(Class, SpawnLocation, SpawnRotation, SpawnParams);
 	if (!NewActor)
 	{

@@ -48,14 +48,28 @@ void ADirector::Tick(float DeltaTime)
 
 void ADirector::TickDirector()
 {
-	UE_LOG(LogTemp, Display, TEXT("TickEvent"));
-
 	ReceiveSpawnCredits();
-	if (FMath::RandRange(1, 100) <= 50)
+
+	// Attempt to spawn enemies every 10 seconds
+	if (TickNum >= 10)
 	{
-		SpawnEnemies();
+		// TODO: Modify logic for potential elite enemy spawns later
+		if (FMath::RandRange(1, 100) <= 50 + SpawnChanceBonus)
+		{
+			SpawnChanceBonus = 0;
+			SpawnSwarmEnemies();
+		}
+		else
+		{
+			// Each failed attempt will increase the chance of spawning next time by 10%
+			SpawnChanceBonus += 10;
+		}
+
+		TickNum = 0;
 	}
+
 	UE_LOG(LogTemp, Display, TEXT("Current credit count: %d"), SpawnCredits);
+	TickNum += 1;
 }
 
 void ADirector::ReceiveSpawnCredits()
@@ -75,9 +89,14 @@ void ADirector::ReceiveSpawnCredits()
 	SpawnCredits += FMath::RoundToInt(BaseCreditAmountToReceive * Multiplier);
 }
 
-void ADirector::SpawnEnemies()
+void ADirector::SpawnSwarmEnemies()
 {
-	int EnemiesToSpawn = FMath::RandRange(1, SpawnCredits);
+	int EnemySpawnCost = 20;
+
+	// Pack size: minimum 3, maximum 10
+	int EnemiesToSpawn = FMath::RandRange(3, 10);
+	EnemiesToSpawn = FMath::Min(EnemiesToSpawn, SpawnCredits / EnemySpawnCost);
+
 	UE_LOG(LogTemp, Display, TEXT("Spawning %d enemies."), EnemiesToSpawn);
 	float SpawnRadius = 6000.f;
 	FVector PlayerLocation = PlayerCharacter->GetActorLocation();
@@ -85,6 +104,7 @@ void ADirector::SpawnEnemies()
 	FVector SpawnLocation = ChooseEnemySpawnLocation(PlayerLocation, SpawnRadius, 3000.f);
 
 	UWorld* World = GetWorld();
+	FName Path = FName("SwarmEnemies/Pack_" + FString::FromInt(SwarmPackNum++));
 	for (int i = 0; i < EnemiesToSpawn; i++)
 	{
 		FActorSpawnParameters SpawnParams;
@@ -92,10 +112,10 @@ void ADirector::SpawnEnemies()
 		AActor* NewEnemy = Spawn::SpawnActor(World, EnemyActorClass, SpawnLocation, FVector(500.f, 500.f, 10000.f), 0, 60.f, false, SpawnParams, FVector(0, 0, 100));
 		if (NewEnemy)
 		{
-			NewEnemy->SetFolderPath("/SwarmEnemies");
+			NewEnemy->SetFolderPath(Path);
 		}
 	}
-	SpawnCredits -= EnemiesToSpawn;
+	SpawnCredits -= EnemiesToSpawn * EnemySpawnCost;
 }
 
 FVector ADirector::ChooseEnemySpawnLocation(FVector Origin, float Radius, float MinDistance)
