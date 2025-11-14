@@ -2,6 +2,7 @@
 
 
 #include "Director.h"
+#include "Engine.h"
 #include <Kismet/GameplayStatics.h>
 
 #include "EliteEnemy.h"
@@ -79,10 +80,7 @@ void ADirector::ReceiveSpawnCredits()
 	Multiplier += (FPlatformTime::Seconds() - StartTime) / 60.f;
 	Multiplier *= PlayerCharacter->CurrentHP / PlayerCharacter->MaxHP;
 
-	TArray<AActor*> EliteEnemyActors;
-	UGameplayStatics::GetAllActorsOfClass(GetWorld(), AEliteEnemy::StaticClass(), EliteEnemyActors);
-
-	Multiplier *= (1 - 0.16f * EliteEnemyActors.Num());
+	Multiplier *= (1 - 0.16f * CountActors(AEliteEnemy::StaticClass()));
 
 	//UE_LOG(LogTemp, Display, TEXT("Current credit multiplier: %f"), Multiplier);
 
@@ -148,4 +146,16 @@ FVector ADirector::ChooseEnemySpawnLocation(FVector Origin, float Radius, float 
 	}
 
 	return FVector(0, 0, 0);
+}
+
+int ADirector::CountActors(UClass* Class)
+{
+	int Count = 0;
+	UWorld* World = GetWorld();
+	for (TActorIterator<AActor> It(World, Class); It; ++It)
+	{
+		Count++;
+	}
+	UE_LOG(LogTemp, Display, TEXT("Counted %d actors of class %s"), Count, *Class->GetName());
+	return Count;
 }

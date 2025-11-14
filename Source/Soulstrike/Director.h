@@ -30,6 +30,7 @@ private:
 
 	void ReceiveSpawnCredits();
 	void SpawnSwarmEnemies();
+	int CountActors(UClass* Class);
 	FVector ChooseEnemySpawnLocation(FVector Origin, float Radius, float MinDistance);
 
 	ACharacterBase* PlayerCharacter;
