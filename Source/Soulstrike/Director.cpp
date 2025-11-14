@@ -82,7 +82,8 @@ void ADirector::ReceiveSpawnCredits()
 
 	Multiplier *= (1 - 0.16f * CountActors(AEliteEnemy::StaticClass()));
 
-	//UE_LOG(LogTemp, Display, TEXT("Current credit multiplier: %f"), Multiplier);
+	Multiplier *= FMath::Min(1.f, 20.f / (CountActors(EnemyActorClass) + 10));
+	UE_LOG(LogTemp, Display, TEXT("Current credit multiplier: %f"), Multiplier);
 
 	SpawnCredits += FMath::RoundToInt(BaseCreditAmountToReceive * Multiplier);
 }
