@@ -9,13 +9,6 @@
 #include "Util/Spawn.h"
 #include "Util/LoadBP.h"
 
-TSubclassOf<AActor> EnemyActorClass;
-
-TSubclassOf<AActor> EliteArcherActorClass;
-TSubclassOf<AActor> EliteAssassinActorClass;
-TSubclassOf<AActor> EliteGiantActorClass;
-TSubclassOf<AActor> EliteHealerActorClass;
-TSubclassOf<AActor> ElitePaladinActorClass;
 
 // Sets default values
 ADirector::ADirector()
@@ -30,22 +23,14 @@ void ADirector::BeginPlay()
 	Super::BeginPlay();
 
 	PlayerCharacter = Cast<ACharacterBase>(UGameplayStatics::GetPlayerCharacter(GetWorld(), 0));
-	if (!PlayerCharacter)
+	if (!PlayerCharacter.IsValid())
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Player character not found in LevelScriptActorBase."));
 	}
 
 	LoadBP::LoadClass("/Game/Enemy/BP_Enemy.BP_Enemy_C", EnemyActorClass);
 
-	auto LoadEliteClass = [](std::string BpClass, TSubclassOf<AActor> Class) {
-		LoadBP::LoadClass("/Game/ThirdPersonBP/Blueprints/EliteAI/" + BpClass + "." + BpClass + "_C", Class);
-	};
-
-	LoadEliteClass("BP_EliteArcher", EliteArcherActorClass);
-	LoadEliteClass("BP_EliteAssassin", EliteAssassinActorClass);
-	LoadEliteClass("BP_EliteGiant", EliteGiantActorClass);
-	LoadEliteClass("BP_EliteHealer", EliteHealerActorClass);
-	LoadEliteClass("BP_ElitePaladin", ElitePaladinActorClass);
+	LoadEliteClasses();
 
 	FTimerHandle DirectorTimerHandle;
 	FTimerDelegate DirectorDelegate;
@@ -54,6 +39,21 @@ void ADirector::BeginPlay()
 	GetWorldTimerManager().SetTimer(DirectorTimerHandle, DirectorDelegate, 1.0f, true);
 
 	StartTime = FPlatformTime::Seconds();
+}
+
+void ADirector::LoadEliteClasses()
+{
+	auto LoadEliteClass = [](std::string BpClass, TSubclassOf<AActor>& Class) {
+		LoadBP::LoadClass("/Game/ThirdPersonBP/Blueprints/EliteAI/" + BpClass + "." + BpClass + "_C", Class);
+	};
+
+	for (auto& Entry : EliteClassMap)
+	{
+		LoadEliteClass(Entry.Name, *Entry.ClassPtr);
+
+		if (*Entry.ClassPtr)       // Only add valid classes
+			EliteClasses.Add(*Entry.ClassPtr);
+	}
 }
 
 // Called every frame
@@ -70,16 +70,24 @@ void ADirector::TickDirector()
 	// Attempt to spawn enemies every 10 seconds
 	if (TickNum >= 10)
 	{
-		// TODO: Modify logic for potential elite enemy spawns later
 		if (FMath::RandRange(1, 100) <= 50 + SpawnChanceBonus)
 		{
+			if (SpawnCredits >= EliteSpawnCost && FMath::RandRange(1, 100) <= 25 + SpawnEliteChanceBonus)
+			{
+				SpawnEliteEnemies();
+				SpawnEliteChanceBonus = 0;
+			}
+			else
+			{
+				SpawnEliteChanceBonus += 25;
+				SpawnSwarmEnemies();
+			}
 			SpawnChanceBonus = 0;
-			SpawnSwarmEnemies();
 		}
 		else
 		{
-			// Each failed attempt will increase the chance of spawning next time by 10%
-			SpawnChanceBonus += 10;
+			// Each failed attempt will increase the chance of spawning next time by 25%
+			SpawnChanceBonus += 25;
 		}
 
 		TickNum = 0;
@@ -106,8 +114,6 @@ void ADirector::ReceiveSpawnCredits()
 
 void ADirector::SpawnSwarmEnemies()
 {
-	int EnemySpawnCost = 20;
-
 	// Pack size: minimum 3, maximum 10
 	int EnemiesToSpawn = FMath::RandRange(3, 10);
 	EnemiesToSpawn = FMath::Min(EnemiesToSpawn, SpawnCredits / EnemySpawnCost);
@@ -131,6 +137,29 @@ void ADirector::SpawnSwarmEnemies()
 		}
 	}
 	SpawnCredits -= EnemiesToSpawn * EnemySpawnCost;
+}
+
+void ADirector::SpawnEliteEnemies()
+{
+	int EnemiesToSpawn = FMath::RandRange(1, 2);
+	EnemiesToSpawn = FMath::Min(EnemiesToSpawn, SpawnCredits / EliteSpawnCost);
+
+	for (int i = 0; i < EnemiesToSpawn; i++)
+	{
+		TSubclassOf<AActor> SelectedEliteClass = EliteClasses[FMath::RandRange(0, EliteClasses.Num() - 1)];
+		FVector PlayerLocation = PlayerCharacter->GetActorLocation();
+		FVector SpawnLocation = ChooseEnemySpawnLocation(PlayerLocation, 3000.f, 4000.f);
+
+		UWorld* World = GetWorld();
+
+		FActorSpawnParameters SpawnParams;
+		AActor* NewElite = Spawn::SpawnActor(World, SelectedEliteClass, SpawnLocation, FVector(500.f, 500.f, 10000.f), 0, 60.f, false, SpawnParams, FVector(0, 0, 100));
+		if (NewElite)
+		{
+			NewElite->SetFolderPath("EliteEnemies");
+		}
+	}
+	SpawnCredits -= EnemiesToSpawn * EliteSpawnCost;
 }
 
 FVector ADirector::ChooseEnemySpawnLocation(FVector Origin, float Radius, float MinDistance)

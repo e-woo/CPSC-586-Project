@@ -20,4 +20,7 @@ public:
 
 protected:
 	void BeginPlay() override;
+
+	UPROPERTY()
+	TSubclassOf<AActor> ChestActorClass;
 };

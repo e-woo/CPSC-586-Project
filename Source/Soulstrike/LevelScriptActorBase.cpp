@@ -9,7 +9,6 @@
 
 #include "Util/LoadBP.h"
 #include "Util/Spawn.h"
-TSubclassOf<AActor> ChestActorClass;
 
 void ALevelScriptActorBase::BeginPlay()
 {
