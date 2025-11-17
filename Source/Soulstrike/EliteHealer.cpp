@@ -7,7 +7,7 @@
 AEliteHealer::AEliteHealer()
 {
 	// Healer stats
-	MaxHealth = 70.0f;  // Low CurrentHealth
+	MaxHealth = 70.0f;  // Low health
 	CurrentHealth = MaxHealth;
 	AttackDamage = 15.0f;  // Weak attack
 	MaxAttackRange = 1500.0f;  // Medium range
