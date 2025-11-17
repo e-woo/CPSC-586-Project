@@ -7,7 +7,7 @@
 AEliteGiant::AEliteGiant()
 {
 	// Giant stats
-	MaxHealth = 250.0f;  // Very high CurrentHealth
+	MaxHealth = 250.0f;  // Very high health
 	CurrentHealth = MaxHealth;
 	AttackDamage = 200.0f;  // Massive damage per hit
 	MaxAttackRange = 600.0f;  // Melee range
