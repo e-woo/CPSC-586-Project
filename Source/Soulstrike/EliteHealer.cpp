@@ -66,40 +66,11 @@ void AEliteHealer::PerformSecondaryAttack()
 	ACharacter* BestTarget = nullptr;
 	float LowestHP = 1.0f;
 
-	// Helper lambda to get CurrentHealth percentage
-	auto GetHealthPercentage = [](ACharacter* Character) -> float {
-		if (!Character) return 0.0f;
-		FProperty* CurrentHealthProp = Character->GetClass()->FindPropertyByName(TEXT("CurrentHealth"));
-		FProperty* MaxHealthProp = Character->GetClass()->FindPropertyByName(TEXT("MaxHealth"));
-		if (CurrentHealthProp && MaxHealthProp) {
-			float* CurrentHealthPtr = CurrentHealthProp->ContainerPtrToValuePtr<float>(Character);
-			float* MaxHealthPtr = MaxHealthProp->ContainerPtrToValuePtr<float>(Character);
-			if (CurrentHealthPtr && MaxHealthPtr && *MaxHealthPtr > 0.0f) {
-				return FMath::Clamp(*CurrentHealthPtr / *MaxHealthPtr, 0.0f, 1.0f);
-			}
-		}
-		return 1.0f;
-	};
-
-	// Helper lambda to heal character
-	auto HealCharacter = [](ACharacter* Character, float Amount) {
-		if (!Character) return;
-		FProperty* CurrentHealthProp = Character->GetClass()->FindPropertyByName(TEXT("CurrentHealth"));
-		FProperty* MaxHealthProp = Character->GetClass()->FindPropertyByName(TEXT("MaxHealth"));
-		if (CurrentHealthProp && MaxHealthProp) {
-			float* CurrentHealthPtr = CurrentHealthProp->ContainerPtrToValuePtr<float>(Character);
-			float* MaxHealthPtr = MaxHealthProp->ContainerPtrToValuePtr<float>(Character);
-			if (CurrentHealthPtr && MaxHealthPtr) {
-				*CurrentHealthPtr = FMath::Min(*MaxHealthPtr, *CurrentHealthPtr + Amount);
-			}
-		}
-	};
-
 	for (ACharacter* Ally : ClosestAllies)
 	{
-		if (Ally && GetHealthPercentage(Ally) > 0.0f)
+		if (Ally && RLComp->GetCharacterHealthPercentage(Ally) > 0.0f)
 		{
-			float AllyHP = GetHealthPercentage(Ally);
+			float AllyHP = RLComp->GetCharacterHealthPercentage(Ally);
 			if (AllyHP < 0.9f && AllyHP < LowestHP)
 			{
 				float Distance = FVector::Dist(GetActorLocation(), Ally->GetActorLocation());
@@ -115,7 +86,12 @@ void AEliteHealer::PerformSecondaryAttack()
 	if (BestTarget)
 	{
 		// Heal the ally
-		HealCharacter(BestTarget, HealAmount);
+		float CurrentHealth, MaxHealth;
+		if (RLComp->GetCharacterHealth(BestTarget, CurrentHealth) && RLComp->GetCharacterMaxHealth(BestTarget, MaxHealth))
+		{
+			float NewHealth = FMath::Min(MaxHealth, CurrentHealth + HealAmount);
+			RLComp->SetCharacterHealth(BestTarget, NewHealth);
+		}
 		RLComp->RecordHealingDone(HealAmount);
 		
 		UE_LOG(LogTemp, Log, TEXT("Healer: Healed %s for %.0f HP"), *BestTarget->GetName(), HealAmount);

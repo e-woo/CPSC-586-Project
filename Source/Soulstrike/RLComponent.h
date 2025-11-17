@@ -305,6 +305,18 @@ public:
 	/** Find the N closest allies (made public for Healer secondary attack) */
 	void FindClosestAllies(TArray<ACharacter*>& OutAllies, int32 NumAllies = 3);
 
+	/** Get health percentage from Blueprint variables */
+	float GetCharacterHealthPercentage(ACharacter* Character) const;
+
+	/** Get CurrentHealth value from Blueprint */
+	bool GetCharacterHealth(ACharacter* Character, float& OutCurrentHealth) const;
+
+	/** Get MaxHealth value from Blueprint */
+	bool GetCharacterMaxHealth(ACharacter* Character, float& OutMaxHealth) const;
+
+	/** Set CurrentHealth value in Blueprint (e.g., for healing) */
+	bool SetCharacterHealth(ACharacter* Character, float NewHealth);
+
 	/** How long to stick with an action before allowing change (smoother movement) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "RL|Movement")
 	float MinActionDuration;
@@ -353,9 +365,6 @@ protected:
 
 	/** Debug visualization */
 	void DebugDraw();
-
-	/** Get health percentage from Blueprint variables */
-	float GetCharacterHealthPercentage(ACharacter* Character) const;
 
 	/** Check if character is alive */
 	bool IsCharacterAlive(ACharacter* Character) const;

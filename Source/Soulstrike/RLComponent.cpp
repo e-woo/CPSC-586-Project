@@ -779,23 +779,74 @@ void URLComponent::DebugDraw()
 	DrawDebugString(GetWorld(), DebugLocation, DebugText, nullptr, FColor::Yellow, 0.1f, true);
 }
 
+bool URLComponent::GetCharacterHealth(ACharacter* Character, float& OutCurrentHealth) const
+{
+	if (!Character)
+		return false;
+
+	FProperty* CurrentHealthProp = Character->GetClass()->FindPropertyByName(TEXT("CurrentHealth"));
+	if (CurrentHealthProp)
+	{
+		float* CurrentHealthPtr = CurrentHealthProp->ContainerPtrToValuePtr<float>(Character);
+		if (CurrentHealthPtr)
+		{
+			OutCurrentHealth = *CurrentHealthPtr;
+			return true;
+		}
+	}
+
+	return false;
+}
+
+bool URLComponent::GetCharacterMaxHealth(ACharacter* Character, float& OutMaxHealth) const
+{
+	if (!Character)
+		return false;
+
+	FProperty* MaxHealthProp = Character->GetClass()->FindPropertyByName(TEXT("MaxHealth"));
+	if (MaxHealthProp)
+	{
+		float* MaxHealthPtr = MaxHealthProp->ContainerPtrToValuePtr<float>(Character);
+		if (MaxHealthPtr)
+		{
+			OutMaxHealth = *MaxHealthPtr;
+			return true;
+		}
+	}
+
+	return false;
+}
+
+bool URLComponent::SetCharacterHealth(ACharacter* Character, float NewHealth)
+{
+	if (!Character)
+		return false;
+
+	FProperty* CurrentHealthProp = Character->GetClass()->FindPropertyByName(TEXT("CurrentHealth"));
+	if (CurrentHealthProp)
+	{
+		float* CurrentHealthPtr = CurrentHealthProp->ContainerPtrToValuePtr<float>(Character);
+		if (CurrentHealthPtr)
+		{
+			*CurrentHealthPtr = NewHealth;
+			return true;
+		}
+	}
+
+	return false;
+}
+
 float URLComponent::GetCharacterHealthPercentage(ACharacter* Character) const
 {
 	if (!Character)
 		return 0.0f;
 
-	// Try to get CurrentHealth and MaxHealth from Blueprint
-	FProperty* CurrentHealthProp = Character->GetClass()->FindPropertyByName(TEXT("CurrentHealth"));
-	FProperty* MaxHealthProp = Character->GetClass()->FindPropertyByName(TEXT("MaxHealth"));
-
-	if (CurrentHealthProp && MaxHealthProp)
+	float CurrentHealth, MaxHealth;
+	if (GetCharacterHealth(Character, CurrentHealth) && GetCharacterMaxHealth(Character, MaxHealth))
 	{
-		float* CurrentHealthPtr = CurrentHealthProp->ContainerPtrToValuePtr<float>(Character);
-		float* MaxHealthPtr = MaxHealthProp->ContainerPtrToValuePtr<float>(Character);
-
-		if (CurrentHealthPtr && MaxHealthPtr && *MaxHealthPtr > 0.0f)
+		if (MaxHealth > 0.0f)
 		{
-			return FMath::Clamp(*CurrentHealthPtr / *MaxHealthPtr, 0.0f, 1.0f);
+			return FMath::Clamp(CurrentHealth / MaxHealth, 0.0f, 1.0f);
 		}
 	}
 
@@ -875,16 +926,11 @@ void URLComponent::PerformSecondaryAttackOnElite()
 		{
 			// Heal the ally
 			float HealAmount = Cast<AEliteHealer>(EliteBehavior)->HealAmount;
-			FProperty* CurrentHealthProp = BestTarget->GetClass()->FindPropertyByName(TEXT("CurrentHealth"));
-			FProperty* MaxHealthProp = BestTarget->GetClass()->FindPropertyByName(TEXT("MaxHealth"));
-			if (CurrentHealthProp && MaxHealthProp)
+			float CurrentHealth, MaxHealth;
+			if (GetCharacterHealth(BestTarget, CurrentHealth) && GetCharacterMaxHealth(BestTarget, MaxHealth))
 			{
-				float* CurrentHealthPtr = CurrentHealthProp->ContainerPtrToValuePtr<float>(BestTarget);
-				float* MaxHealthPtr = MaxHealthProp->ContainerPtrToValuePtr<float>(BestTarget);
-				if (CurrentHealthPtr && MaxHealthPtr)
-				{
-					*CurrentHealthPtr = FMath::Min(*MaxHealthPtr, *CurrentHealthPtr + HealAmount);
-				}
+				float NewHealth = FMath::Min(MaxHealth, CurrentHealth + HealAmount);
+				SetCharacterHealth(BestTarget, NewHealth);
 			}
 			
 			RecordHealingDone(HealAmount);
