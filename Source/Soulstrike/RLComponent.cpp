@@ -874,7 +874,7 @@ void URLComponent::PerformSecondaryAttackOnElite()
 		if (BestTarget)
 		{
 			// Heal the ally
-			float HealAmount = 50.0f;
+			float HealAmount = Cast<AEliteHealer>(EliteBehavior)->HealAmount;
 			FProperty* CurrentHealthProp = BestTarget->GetClass()->FindPropertyByName(TEXT("CurrentHealth"));
 			FProperty* MaxHealthProp = BestTarget->GetClass()->FindPropertyByName(TEXT("MaxHealth"));
 			if (CurrentHealthProp && MaxHealthProp)
