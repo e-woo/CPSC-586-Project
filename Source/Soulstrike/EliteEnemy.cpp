@@ -8,12 +8,12 @@ AEliteEnemy::AEliteEnemy()
 
 	// Default stats
 	MaxHealth = 100.0f;
-	Health = MaxHealth;
+	CurrentHealth = MaxHealth;
 	AttackDamage = 10.0f;
 	MaxAttackRange = 500.0f;
 
 	// Default attack timing (will be overridden by subclasses)
-	AttackDuration = 0.1f;
+	AttackWindupDuration = 0.1f;
 	AttackCooldown = 0.5f;
 	HealAmount = 0.0f;
 
@@ -49,7 +49,7 @@ AEliteEnemy::AEliteEnemy()
 void AEliteEnemy::BeginPlay()
 {
 	Super::BeginPlay();
-	Health = MaxHealth;
+	CurrentHealth = MaxHealth;
 }
 
 void AEliteEnemy::Tick(float DeltaTime)
@@ -62,9 +62,9 @@ void AEliteEnemy::TakeDamageFromPlayer(float DamageAmount)
 	if (!IsAlive())
 		return;
 
-	Health = FMath::Max(0.0f, Health - DamageAmount);
+	CurrentHealth = FMath::Max(0.0f, CurrentHealth - DamageAmount);
 
-	if (Health <= 0.0f)
+	if (CurrentHealth <= 0.0f)
 	{
 		Die();
 	}
@@ -75,19 +75,19 @@ void AEliteEnemy::Heal(float Amount)
 	if (!IsAlive())
 		return;
 
-	Health = FMath::Min(MaxHealth, Health + Amount);
+	CurrentHealth = FMath::Min(MaxHealth, CurrentHealth + Amount);
 }
 
 float AEliteEnemy::GetHealthPercentage() const
 {
 	if (MaxHealth <= 0.0f)
 		return 0.0f;
-	return FMath::Clamp(Health / MaxHealth, 0.0f, 1.0f);
+	return FMath::Clamp(CurrentHealth / MaxHealth, 0.0f, 1.0f);
 }
 
 bool AEliteEnemy::IsAlive() const
 {
-	return Health > 0.0f;
+	return CurrentHealth > 0.0f;
 }
 
 void AEliteEnemy::Die()

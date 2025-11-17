@@ -8,12 +8,12 @@ AEliteHealer::AEliteHealer()
 {
 	// Healer stats
 	MaxHealth = 70.0f;  // Low health
-	Health = MaxHealth;
+	CurrentHealth = MaxHealth;
 	AttackDamage = 15.0f;  // Weak attack
 	MaxAttackRange = 1500.0f;  // Medium range
 
 	// Healer attack timing: Weak attacks
-	AttackDuration = 0.1f;
+	AttackWindupDuration = 0.1f;
 	AttackCooldown = 0.4f;
 
 	// Heal ability
@@ -60,21 +60,50 @@ void AEliteHealer::PerformSecondaryAttack()
 		return;
 
 	// Find lowest HP ally from the 3 closest
-	TArray<AEliteEnemy*> ClosestAllies;
+	TArray<ACharacter*> ClosestAllies;
 	RLComp->FindClosestAllies(ClosestAllies, 3);
 
-	AEliteEnemy* BestTarget = nullptr;
+	ACharacter* BestTarget = nullptr;
 	float LowestHP = 1.0f;
 
-	for (AEliteEnemy* Ally : ClosestAllies)
+	// Helper lambda to get CurrentHealth percentage
+	auto GetHealthPercentage = [](ACharacter* Character) -> float {
+		if (!Character) return 0.0f;
+		FProperty* CurrentHealthProp = Character->GetClass()->FindPropertyByName(TEXT("CurrentHealth"));
+		FProperty* MaxHealthProp = Character->GetClass()->FindPropertyByName(TEXT("MaxHealth"));
+		if (CurrentHealthProp && MaxHealthProp) {
+			float* CurrentHealthPtr = CurrentHealthProp->ContainerPtrToValuePtr<float>(Character);
+			float* MaxHealthPtr = MaxHealthProp->ContainerPtrToValuePtr<float>(Character);
+			if (CurrentHealthPtr && MaxHealthPtr && *MaxHealthPtr > 0.0f) {
+				return FMath::Clamp(*CurrentHealthPtr / *MaxHealthPtr, 0.0f, 1.0f);
+			}
+		}
+		return 1.0f;
+	};
+
+	// Helper lambda to heal character
+	auto HealCharacter = [](ACharacter* Character, float Amount) {
+		if (!Character) return;
+		FProperty* CurrentHealthProp = Character->GetClass()->FindPropertyByName(TEXT("CurrentHealth"));
+		FProperty* MaxHealthProp = Character->GetClass()->FindPropertyByName(TEXT("MaxHealth"));
+		if (CurrentHealthProp && MaxHealthProp) {
+			float* CurrentHealthPtr = CurrentHealthProp->ContainerPtrToValuePtr<float>(Character);
+			float* MaxHealthPtr = MaxHealthProp->ContainerPtrToValuePtr<float>(Character);
+			if (CurrentHealthPtr && MaxHealthPtr) {
+				*CurrentHealthPtr = FMath::Min(*MaxHealthPtr, *CurrentHealthPtr + Amount);
+			}
+		}
+	};
+
+	for (ACharacter* Ally : ClosestAllies)
 	{
-		if (Ally && Ally->IsAlive())
+		if (Ally && GetHealthPercentage(Ally) > 0.0f)
 		{
-			float AllyHP = Ally->GetHealthPercentage();
-			if (AllyHP < 0.9f && AllyHP < LowestHP)  // Needs healing
+			float AllyHP = GetHealthPercentage(Ally);
+			if (AllyHP < 0.9f && AllyHP < LowestHP)
 			{
 				float Distance = FVector::Dist(GetActorLocation(), Ally->GetActorLocation());
-				if (Distance <= MaxAttackRange)  // In heal range
+				if (Distance <= MaxAttackRange)
 				{
 					LowestHP = AllyHP;
 					BestTarget = Ally;
@@ -86,7 +115,7 @@ void AEliteHealer::PerformSecondaryAttack()
 	if (BestTarget)
 	{
 		// Heal the ally
-		BestTarget->Heal(HealAmount);
+		HealCharacter(BestTarget, HealAmount);
 		RLComp->RecordHealingDone(HealAmount);
 		
 		UE_LOG(LogTemp, Log, TEXT("Healer: Healed %s for %.0f HP"), *BestTarget->GetName(), HealAmount);

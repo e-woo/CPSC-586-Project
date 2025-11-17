@@ -8,12 +8,12 @@ AEliteGiant::AEliteGiant()
 {
 	// Giant stats
 	MaxHealth = 250.0f;  // Very high health
-	Health = MaxHealth;
+	CurrentHealth = MaxHealth;
 	AttackDamage = 200.0f;  // Massive damage per hit
 	MaxAttackRange = 600.0f;  // Melee range
 
 	// Giant attack timing: Slow devastating slams
-	AttackDuration = 0.1f;  // Slam impact
+	AttackWindupDuration = 0.1f;  // Slam impact
 	AttackCooldown = 1.9f;  // Very slow recovery
 
 	// Movement

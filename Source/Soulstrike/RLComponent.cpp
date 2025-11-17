@@ -1,5 +1,11 @@
 #include "RLComponent.h"
 #include "EliteEnemy.h"
+#include "EliteArcher.h"
+#include "EliteAssassin.h"
+#include "ElitePaladin.h"
+#include "EliteGiant.h"
+#include "EliteHealer.h"
+#include "EnemyLogicManager.h"
 #include "SoulstrikeGameInstance.h"
 #include "GameFramework/Character.h"
 #include "Kismet/GameplayStatics.h"
@@ -16,6 +22,12 @@ URLComponent::URLComponent()
 	Gamma = 0.95f;
 	Epsilon = 0.2f;
 	EpsilonDecayRate = 0.0f;
+
+	// Default stats (will be overridden by Elite behavior object)
+	AttackDamage = 10.0f;
+	MaxAttackRange = 500.0f;
+	AttackWindupDuration = 0.3f;
+	AttackCooldown = 0.5f;
 
 	// Debug
 	bDebugMode = false;
@@ -75,16 +87,73 @@ void URLComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 void URLComponent::Initialize(APawn* InPawn)
 {
-	OwnerElite = Cast<AEliteEnemy>(InPawn);
-	if (OwnerElite)
+	OwnerCharacter = Cast<ACharacter>(InPawn);
+	if (OwnerCharacter)
 	{
-		PreviousHealth = OwnerElite->Health;
+		// Get initial health from Blueprint variable "CurrentHealth"
+		FProperty* HealthProperty = OwnerCharacter->GetClass()->FindPropertyByName(TEXT("CurrentHealth"));
+		if (HealthProperty)
+		{
+			float* HealthPtr = HealthProperty->ContainerPtrToValuePtr<float>(OwnerCharacter);
+			if (HealthPtr)
+			{
+				PreviousHealth = *HealthPtr;
+			}
+		}
+		else
+		{
+			PreviousHealth = 100.0f;
+		}
+
+		// Detect elite type by name and create corresponding C++ behavior object
+		FString PawnName = InPawn->GetName();
+		
+		if (PawnName.Contains("Archer"))
+		{
+			EliteBehavior = NewObject<AEliteArcher>(this, AEliteArcher::StaticClass());
+		}
+		else if (PawnName.Contains("Assassin"))
+		{
+			EliteBehavior = NewObject<AEliteAssassin>(this, AEliteAssassin::StaticClass());
+		}
+		else if (PawnName.Contains("Paladin"))
+		{
+			EliteBehavior = NewObject<AElitePaladin>(this, AElitePaladin::StaticClass());
+		}
+		else if (PawnName.Contains("Giant"))
+		{
+			EliteBehavior = NewObject<AEliteGiant>(this, AEliteGiant::StaticClass());
+		}
+		else if (PawnName.Contains("Healer"))
+		{
+			EliteBehavior = NewObject<AEliteHealer>(this, AEliteHealer::StaticClass());
+		}
+		else
+		{
+			// Fallback to base
+			EliteBehavior = NewObject<AEliteEnemy>(this, AEliteEnemy::StaticClass());
+		}
+
+		// Copy stats from behavior object
+		if (EliteBehavior)
+		{
+			AttackDamage = EliteBehavior->AttackDamage;
+			MaxAttackRange = EliteBehavior->MaxAttackRange;
+			AttackWindupDuration = EliteBehavior->AttackWindupDuration;
+			AttackCooldown = EliteBehavior->AttackCooldown;
+
+			UE_LOG(LogTemp, Log, TEXT("RLComponent: Created %s behavior for %s (Damage: %.0f, Range: %.0f)"),
+				*EliteBehavior->GetClass()->GetName(), *PawnName, AttackDamage, MaxAttackRange);
+		}
+
+		UE_LOG(LogTemp, Log, TEXT("RLComponent: Initialized with character %s (Initial HP: %.1f)"), 
+			*OwnerCharacter->GetName(), PreviousHealth);
 	}
 }
 
 void URLComponent::ExecuteRLStep(float DeltaTime)
 {
-	if (!OwnerElite || !OwnerElite->IsAlive())
+	if (!OwnerCharacter || !IsCharacterAlive(OwnerCharacter))
 		return;
 
 	// Update cached player location
@@ -97,33 +166,38 @@ void URLComponent::ExecuteRLStep(float DeltaTime)
 	float CurrentTime = GetWorld()->GetTimeSeconds();
 	CleanupDamageHistory(CurrentTime);
 
+	// Update poison ticks (for Assassin)
+	if (ActivePoisons.Num() > 0)
+	{
+		UpdatePoisons(DeltaTime);
+	}
+
 	// === ATTACK STATE MACHINE UPDATE ===
 	if (AttackState == EAttackState::Attacking)
 	{
 		AttackTimer += DeltaTime;
-		if (AttackTimer >= OwnerElite->AttackDuration)
+		if (AttackTimer >= AttackWindupDuration)
 		{
-			// Attack animation finished, enter cooldown
+			// Attack windup finished - now check if player is still in range and apply damage
+			OnAttackWindupComplete();
+			
+			// Enter cooldown
 			AttackState = EAttackState::OnCooldown;
 			AttackTimer = 0.0f;
-
-			// Apply attack effects now (damage/heal)
-			OwnerElite->OnAttackComplete();
 		}
-		// Skip RL execution during attack
+		// Skip RL execution during attack windup, but still draw debug
 		if (bDebugMode) DebugDraw();
 		return;
 	}
 	else if (AttackState == EAttackState::OnCooldown)
 	{
 		AttackTimer += DeltaTime;
-		if (AttackTimer >= OwnerElite->AttackCooldown)
+		if (AttackTimer >= AttackCooldown)
 		{
 			// Cooldown finished, ready to attack again
 			AttackState = EAttackState::Normal;
 			AttackTimer = 0.0f;
 		}
-		// Continue with RL during cooldown (can move, just can't attack)
 	}
 
 	// Update internal timers
@@ -132,11 +206,15 @@ void URLComponent::ExecuteRLStep(float DeltaTime)
 	ActionPersistenceTimer += DeltaTime;
 
 	// Check if we took damage this frame
-	if (OwnerElite->Health < PreviousHealth)
+	float CurrentHealth = GetCharacterHealthPercentage(OwnerCharacter) * 100.0f;
+	if (CurrentHealth < PreviousHealth)
 	{
+		float HealthLost = PreviousHealth - CurrentHealth;
+		UE_LOG(LogTemp, Warning, TEXT("RLComponent: %s took %.1f damage! (%.1f -> %.1f)"),
+			*OwnerCharacter->GetName(), HealthLost, PreviousHealth, CurrentHealth);
 		TimeSinceLastDamageTaken = 0.0f;
 	}
-	PreviousHealth = OwnerElite->Health;
+	PreviousHealth = CurrentHealth;
 
 	// Apply epsilon decay
 	if (EpsilonDecayRate > 0.0f)
@@ -158,11 +236,20 @@ void URLComponent::ExecuteRLStep(float DeltaTime)
 	if (PreviousState.SelfHealthPercentage > 0.0f)
 	{
 		float Reward = CalculateReward();
+		
+		// Log reward if significant health change
+		float HealthDelta = CurrentState.SelfHealthPercentage - PreviousState.SelfHealthPercentage;
+		if (FMath::Abs(HealthDelta) > 0.01f)
+		{
+			UE_LOG(LogTemp, Log, TEXT("RLComponent: %s health delta: %.3f, reward: %.2f"),
+				*OwnerCharacter->GetName(), HealthDelta, Reward);
+		}
+		
 		UpdateWeights(PreviousState, LastAction, Reward, CurrentState);
 		LastReward = Reward;
 	}
 
-	// Select action (with persistence for smoother movement)
+	// Select action
 	EEliteAction SelectedAction = SelectAction(CurrentState);
 
 	// If attack action selected, check if can actually attack
@@ -170,15 +257,13 @@ void URLComponent::ExecuteRLStep(float DeltaTime)
 	{
 		if (AttackState != EAttackState::Normal)
 		{
-			// Can't attack, fallback to moving toward player
 			SelectedAction = EEliteAction::Move_Towards_Player;
 		}
 	}
 	
-	// Only change action if enough time has passed (prevents jerky movement)
+	// Action persistence for smoother movement
 	if (ActionPersistenceTimer >= MinActionDuration || SelectedAction != PendingAction)
 	{
-		// Reset persistence timer when changing actions
 		if (SelectedAction != LastAction)
 		{
 			ActionPersistenceTimer = 0.0f;
@@ -190,11 +275,10 @@ void URLComponent::ExecuteRLStep(float DeltaTime)
 	}
 	else
 	{
-		// Continue executing the previous action
 		ExecuteAction(LastAction, DeltaTime);
 	}
 
-	// Always draw debug (even during attack/cooldown)
+	// Always draw debug when enabled
 	if (bDebugMode)
 	{
 		DebugDraw();
@@ -205,60 +289,54 @@ FRLState URLComponent::BuildState()
 {
 	FRLState State;
 
-	if (!OwnerElite || !PlayerCharacter)
+	if (!OwnerCharacter || !PlayerCharacter)
 		return State;
 
 	// Self stats
-	State.SelfHealthPercentage = OwnerElite->GetHealthPercentage();
+	State.SelfHealthPercentage = GetCharacterHealthPercentage(OwnerCharacter);
 	State.TimeSinceLastAttack = FMath::Clamp(TimeSinceLastPrimaryAttack / 5.0f, 0.0f, 1.0f);
 	State.bTookDamageRecently = (TimeSinceLastDamageTaken < 1.0f);
 
 	// Distance to player
-	float ActualDistance = FVector::Dist(OwnerElite->GetActorLocation(), CachedPlayerLocation);
-	float MaxRange = OwnerElite->MaxAttackRange;
-	State.bIsBeyondMaxRange = (ActualDistance > MaxRange);
-	State.DistanceToPlayer = FMath::Clamp(ActualDistance / MaxRange, 0.0f, 1.0f);
+	float ActualDistance = FVector::Dist(OwnerCharacter->GetActorLocation(), CachedPlayerLocation);
+	State.bIsBeyondMaxRange = (ActualDistance > MaxAttackRange);
+	State.DistanceToPlayer = FMath::Clamp(ActualDistance / MaxAttackRange, 0.0f, 1.0f);
 
 	// Player stats
-	ACharacter* Player = Cast<ACharacter>(PlayerCharacter);
-	if (Player)
-	{
-		// For now, assume player has 100 health (we can make this more robust later)
-		State.PlayerHealthPercentage = 1.0f; // TODO: Get actual player health
-	}
+	State.PlayerHealthPercentage = 1.0f; // TODO: Get actual player health
 
 	// Line of sight
 	State.bHasLineOfSightToPlayer = HasLineOfSightToPlayer();
 
 	// Allies
-	TArray<AEliteEnemy*> ClosestAllies;
+	TArray<ACharacter*> ClosestAllies;
 	FindClosestAllies(ClosestAllies, 3);
 
 	const float MaxAllyDistance = 2000.0f;
 
 	if (ClosestAllies.Num() > 0)
 	{
-		State.HealthOfClosestAlly = ClosestAllies[0]->GetHealthPercentage();
+		State.HealthOfClosestAlly = GetCharacterHealthPercentage(ClosestAllies[0]);
 		State.DistanceToClosestAlly = FMath::Clamp(
-			FVector::Dist(OwnerElite->GetActorLocation(), ClosestAllies[0]->GetActorLocation()) / MaxAllyDistance,
+			FVector::Dist(OwnerCharacter->GetActorLocation(), ClosestAllies[0]->GetActorLocation()) / MaxAllyDistance,
 			0.0f, 1.0f
 		);
 	}
 
 	if (ClosestAllies.Num() > 1)
 	{
-		State.HealthOfSecondClosestAlly = ClosestAllies[1]->GetHealthPercentage();
+		State.HealthOfSecondClosestAlly = GetCharacterHealthPercentage(ClosestAllies[1]);
 		State.DistanceToSecondClosestAlly = FMath::Clamp(
-			FVector::Dist(OwnerElite->GetActorLocation(), ClosestAllies[1]->GetActorLocation()) / MaxAllyDistance,
+			FVector::Dist(OwnerCharacter->GetActorLocation(), ClosestAllies[1]->GetActorLocation()) / MaxAllyDistance,
 			0.0f, 1.0f
 		);
 	}
 
 	if (ClosestAllies.Num() > 2)
 	{
-		State.HealthOfThirdClosestAlly = ClosestAllies[2]->GetHealthPercentage();
+		State.HealthOfThirdClosestAlly = GetCharacterHealthPercentage(ClosestAllies[2]);
 		State.DistanceToThirdClosestAlly = FMath::Clamp(
-			FVector::Dist(OwnerElite->GetActorLocation(), ClosestAllies[2]->GetActorLocation()) / MaxAllyDistance,
+			FVector::Dist(OwnerCharacter->GetActorLocation(), ClosestAllies[2]->GetActorLocation()) / MaxAllyDistance,
 			0.0f, 1.0f
 		);
 	}
@@ -326,19 +404,19 @@ EEliteAction URLComponent::SelectAction(const FRLState& State)
 
 void URLComponent::ExecuteAction(EEliteAction Action, float DeltaTime)
 {
-	if (!OwnerElite || !PlayerCharacter)
+	if (!OwnerCharacter || !PlayerCharacter)
 		return;
 
-	AAIController* AIController = Cast<AAIController>(OwnerElite->GetController());
+	AAIController* AIController = Cast<AAIController>(OwnerCharacter->GetController());
 	if (!AIController)
 		return;
 
-	FVector OwnerLocation = OwnerElite->GetActorLocation();
+	FVector OwnerLocation = OwnerCharacter->GetActorLocation();
 	FVector PlayerLocation = CachedPlayerLocation;
 	FVector DirectionToPlayer = (PlayerLocation - OwnerLocation).GetSafeNormal();
 	FVector RightVector = FVector::CrossProduct(DirectionToPlayer, FVector::UpVector).GetSafeNormal();
 
-	const float MoveDistance = 200.0f; // How far to move per action
+	const float MoveDistance = 200.0f;
 
 	switch (Action)
 	{
@@ -370,8 +448,7 @@ void URLComponent::ExecuteAction(EEliteAction Action, float DeltaTime)
 	{
 		if (AttackState == EAttackState::Normal && !CurrentState.bIsBeyondMaxRange)
 		{
-			// Start attack
-			OwnerElite->PerformPrimaryAttack();
+			PerformPrimaryAttackOnElite();
 			AttackState = EAttackState::Attacking;
 			AttackTimer = 0.0f;
 			TimeSinceLastPrimaryAttack = 0.0f;
@@ -382,8 +459,7 @@ void URLComponent::ExecuteAction(EEliteAction Action, float DeltaTime)
 	{
 		if (AttackState == EAttackState::Normal && !CurrentState.bIsBeyondMaxRange)
 		{
-			// Start secondary attack (heal for healer, or other abilities)
-			OwnerElite->PerformSecondaryAttack();
+			PerformSecondaryAttackOnElite();
 			AttackState = EAttackState::Attacking;
 			AttackTimer = 0.0f;
 		}
@@ -582,30 +658,35 @@ TMap<FName, float> URLComponent::ExtractFeatures(const FRLState& State)
 	return Features;
 }
 
-void URLComponent::FindClosestAllies(TArray<AEliteEnemy*>& OutAllies, int32 NumAllies)
+void URLComponent::FindClosestAllies(TArray<ACharacter*>& OutAllies, int32 NumAllies)
 {
 	OutAllies.Empty();
 
-	if (!OwnerElite)
+	if (!OwnerCharacter)
 		return;
 
 	TArray<AActor*> FoundActors;
-	UGameplayStatics::GetAllActorsOfClass(GetWorld(), AEliteEnemy::StaticClass(), FoundActors);
+	UGameplayStatics::GetAllActorsOfClass(GetWorld(), ACharacter::StaticClass(), FoundActors);
 
-	TArray<TPair<float, AEliteEnemy*>> AllyDistances;
+	TArray<TPair<float, ACharacter*>> AllyDistances;
 
 	for (AActor* Actor : FoundActors)
 	{
-		AEliteEnemy* Ally = Cast<AEliteEnemy>(Actor);
-		if (Ally && Ally != OwnerElite && Ally->IsAlive())
+		ACharacter* Ally = Cast<ACharacter>(Actor);
+		if (Ally && Ally != OwnerCharacter && IsCharacterAlive(Ally))
 		{
-			float Distance = FVector::Dist(OwnerElite->GetActorLocation(), Ally->GetActorLocation());
-			AllyDistances.Add(TPair<float, AEliteEnemy*>(Distance, Ally));
+			// Check if this character has an AI controller (is an elite)
+			AAIController* AllyAI = Cast<AAIController>(Ally->GetController());
+			if (AllyAI)
+			{
+				float Distance = FVector::Dist(OwnerCharacter->GetActorLocation(), Ally->GetActorLocation());
+				AllyDistances.Add(TPair<float, ACharacter*>(Distance, Ally));
+			}
 		}
 	}
 
 	// Sort by distance
-	AllyDistances.Sort([](const TPair<float, AEliteEnemy*>& A, const TPair<float, AEliteEnemy*>& B) {
+	AllyDistances.Sort([](const TPair<float, ACharacter*>& A, const TPair<float, ACharacter*>& B) {
 		return A.Key < B.Key;
 	});
 
@@ -618,40 +699,44 @@ void URLComponent::FindClosestAllies(TArray<AEliteEnemy*>& OutAllies, int32 NumA
 
 bool URLComponent::HasLineOfSightToPlayer()
 {
-	if (!OwnerElite || !PlayerCharacter)
+	if (!OwnerCharacter || !PlayerCharacter)
 		return false;
 
 	FHitResult HitResult;
-	FVector Start = OwnerElite->GetActorLocation();
+	FVector Start = OwnerCharacter->GetActorLocation();
 	FVector End = CachedPlayerLocation;
 
 	FCollisionQueryParams Params;
-	Params.AddIgnoredActor(OwnerElite);
+	Params.AddIgnoredActor(OwnerCharacter);
 
 	bool bHit = GetWorld()->LineTraceSingleByChannel(HitResult, Start, End, ECC_Visibility, Params);
 
-	// If we hit the player or nothing, we have line of sight
 	return !bHit || HitResult.GetActor() == PlayerCharacter;
 }
 
 int32 URLComponent::CountNearbyAllies(float Radius)
 {
-	if (!OwnerElite)
+	if (!OwnerCharacter)
 		return 0;
 
 	TArray<AActor*> FoundActors;
-	UGameplayStatics::GetAllActorsOfClass(GetWorld(), AEliteEnemy::StaticClass(), FoundActors);
+	UGameplayStatics::GetAllActorsOfClass(GetWorld(), ACharacter::StaticClass(), FoundActors);
 
 	int32 Count = 0;
 	for (AActor* Actor : FoundActors)
 	{
-		AEliteEnemy* Ally = Cast<AEliteEnemy>(Actor);
-		if (Ally && Ally != OwnerElite && Ally->IsAlive())
+		ACharacter* Ally = Cast<ACharacter>(Actor);
+		if (Ally && Ally != OwnerCharacter && IsCharacterAlive(Ally))
 		{
-			float Distance = FVector::Dist(OwnerElite->GetActorLocation(), Ally->GetActorLocation());
-			if (Distance <= Radius)
+			// Check if this character has an AI controller (is an elite)
+			AAIController* AllyAI = Cast<AAIController>(Ally->GetController());
+			if (AllyAI)
 			{
-				Count++;
+				float Distance = FVector::Dist(OwnerCharacter->GetActorLocation(), Ally->GetActorLocation());
+				if (Distance <= Radius)
+				{
+					Count++;
+				}
 			}
 		}
 	}
@@ -666,13 +751,12 @@ void URLComponent::OnPlayerPositionUpdated(const FVector& NewPlayerPosition)
 
 void URLComponent::DebugDraw()
 {
-	if (!OwnerElite)
+	if (!OwnerCharacter)
 		return;
 
-	FVector OwnerLocation = OwnerElite->GetActorLocation();
+	FVector OwnerLocation = OwnerCharacter->GetActorLocation();
 	FVector DebugLocation = OwnerLocation + FVector(0, 0, 150);
 
-	// Show attack state
 	FString StateText = "State: ";
 	switch (AttackState)
 	{
@@ -681,7 +765,6 @@ void URLComponent::DebugDraw()
 	case EAttackState::OnCooldown: StateText += "Cooldown"; break;
 	}
 
-	// Display current state, action, and reward
 	FString DebugText = FString::Printf(
 		TEXT("%s\nAction: %d\nReward: %.2f\nDist: %.2f\nHP: %.2f\nDPS: %.1f"),
 		*StateText,
@@ -692,5 +775,226 @@ void URLComponent::DebugDraw()
 		GetAverageDPS()
 	);
 
-	DrawDebugString(GetWorld(), DebugLocation, DebugText, nullptr, FColor::Yellow, 0.0f, true);
+	// Draw with duration to persist between frames
+	DrawDebugString(GetWorld(), DebugLocation, DebugText, nullptr, FColor::Yellow, 0.1f, true);
+}
+
+float URLComponent::GetCharacterHealthPercentage(ACharacter* Character) const
+{
+	if (!Character)
+		return 0.0f;
+
+	// Try to get CurrentHealth and MaxHealth from Blueprint
+	FProperty* CurrentHealthProp = Character->GetClass()->FindPropertyByName(TEXT("CurrentHealth"));
+	FProperty* MaxHealthProp = Character->GetClass()->FindPropertyByName(TEXT("MaxHealth"));
+
+	if (CurrentHealthProp && MaxHealthProp)
+	{
+		float* CurrentHealthPtr = CurrentHealthProp->ContainerPtrToValuePtr<float>(Character);
+		float* MaxHealthPtr = MaxHealthProp->ContainerPtrToValuePtr<float>(Character);
+
+		if (CurrentHealthPtr && MaxHealthPtr && *MaxHealthPtr > 0.0f)
+		{
+			return FMath::Clamp(*CurrentHealthPtr / *MaxHealthPtr, 0.0f, 1.0f);
+		}
+	}
+
+	return 1.0f; // Default assumption
+}
+
+bool URLComponent::IsCharacterAlive(ACharacter* Character) const
+{
+	return GetCharacterHealthPercentage(Character) > 0.0f;
+}
+
+void URLComponent::PerformPrimaryAttackOnElite()
+{
+	if (!EliteBehavior || !OwnerCharacter)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("RLComponent: Cannot perform attack - EliteBehavior or OwnerCharacter is null!"));
+		return;
+	}
+
+	UWorld* World = OwnerCharacter->GetWorld();
+	if (!World)
+		return;
+
+	ACharacter* Player = UGameplayStatics::GetPlayerCharacter(World, 0);
+	if (!Player)
+		return;
+
+	float DistanceToPlayer = FVector::Dist(OwnerCharacter->GetActorLocation(), Player->GetActorLocation());
+	
+	if (DistanceToPlayer > MaxAttackRange)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("%s: Attack cancelled! Player out of range (%.1f/%.1f)"), 
+			*OwnerCharacter->GetName(), DistanceToPlayer, MaxAttackRange);
+		return;
+	}
+
+	// Start windup - cache player location for later check
+	AttackWindupStartPlayerLocation = Player->GetActorLocation();
+	
+	UE_LOG(LogTemp, Log, TEXT("%s: Starting attack windup (%.2fs)..."), 
+		*OwnerCharacter->GetName(), AttackWindupDuration);
+}
+
+void URLComponent::PerformSecondaryAttackOnElite()
+{
+	if (!EliteBehavior || !OwnerCharacter)
+		return;
+
+	// For now, only Healer has secondary attack (heal)
+	if (EliteBehavior->IsA(AEliteHealer::StaticClass()))
+	{
+		// Find lowest HP ally and heal them
+		TArray<ACharacter*> ClosestAllies;
+		FindClosestAllies(ClosestAllies, 3);
+
+		ACharacter* BestTarget = nullptr;
+		float LowestHP = 1.0f;
+
+		for (ACharacter* Ally : ClosestAllies)
+		{
+			if (Ally && IsCharacterAlive(Ally))
+			{
+				float AllyHP = GetCharacterHealthPercentage(Ally);
+				if (AllyHP < 0.9f && AllyHP < LowestHP)
+				{
+					float Distance = FVector::Dist(OwnerCharacter->GetActorLocation(), Ally->GetActorLocation());
+					if (Distance <= MaxAttackRange)
+					{
+						LowestHP = AllyHP;
+						BestTarget = Ally;
+					}
+				}
+			}
+		}
+
+		if (BestTarget)
+		{
+			// Heal the ally
+			float HealAmount = Cast<AEliteHealer>(EliteBehavior)->HealAmount;
+			FProperty* CurrentHealthProp = BestTarget->GetClass()->FindPropertyByName(TEXT("CurrentHealth"));
+			FProperty* MaxHealthProp = BestTarget->GetClass()->FindPropertyByName(TEXT("MaxHealth"));
+			if (CurrentHealthProp && MaxHealthProp)
+			{
+				float* CurrentHealthPtr = CurrentHealthProp->ContainerPtrToValuePtr<float>(BestTarget);
+				float* MaxHealthPtr = MaxHealthProp->ContainerPtrToValuePtr<float>(BestTarget);
+				if (CurrentHealthPtr && MaxHealthPtr)
+				{
+					*CurrentHealthPtr = FMath::Min(*MaxHealthPtr, *CurrentHealthPtr + HealAmount);
+				}
+			}
+			
+			RecordHealingDone(HealAmount);
+			UE_LOG(LogTemp, Log, TEXT("Healer: Healed %s for %.0f HP"), *BestTarget->GetName(), HealAmount);
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Log, TEXT("%s: Secondary attack (not implemented for this elite type)"), 
+			*OwnerCharacter->GetName());
+	}
+}
+
+void URLComponent::OnAttackWindupComplete()
+{
+	if (!EliteBehavior || !OwnerCharacter)
+		return;
+
+	UWorld* World = OwnerCharacter->GetWorld();
+	if (!World)
+		return;
+
+	ACharacter* Player = UGameplayStatics::GetPlayerCharacter(World, 0);
+	if (!Player)
+		return;
+
+	// Check if player is STILL in range after windup
+	float CurrentDistanceToPlayer = FVector::Dist(OwnerCharacter->GetActorLocation(), Player->GetActorLocation());
+	
+	if (CurrentDistanceToPlayer > MaxAttackRange)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("%s: Attack missed! Player dodged out of range during windup (%.1f/%.1f)"), 
+			*OwnerCharacter->GetName(), CurrentDistanceToPlayer, MaxAttackRange);
+		return;
+	}
+
+	// Player is still in range - apply damage!
+	UE_LOG(LogTemp, Log, TEXT("%s: Attack hit! (%.0f damage)"), *OwnerCharacter->GetName(), AttackDamage);
+
+	// Record damage
+	RecordDamageDealt(AttackDamage);
+
+	// Report damage to Enemy Logic Manager
+	AEnemyLogicManager* EnemyLogicMgr = Cast<AEnemyLogicManager>(
+		UGameplayStatics::GetActorOfClass(World, AEnemyLogicManager::StaticClass())
+	);
+
+	if (EnemyLogicMgr && Player)
+	{
+		EnemyLogicMgr->ReportDamageToPlayer(Player, AttackDamage, OwnerCharacter);
+	}
+
+	// Special case: Assassin applies poison on hit
+	if (EliteBehavior->IsA(AEliteAssassin::StaticClass()))
+	{
+		// Apply poison (90 damage over 3 seconds)
+		FPoisonEffect NewPoison;
+		NewPoison.RemainingDuration = 3.0f;
+		NewPoison.TickInterval = 0.5f;
+		NewPoison.DamagePerTick = 90.0f / (3.0f / 0.5f);  // 90 / 6 ticks = 15 per tick
+		NewPoison.TimeSinceLastTick = 0.0f;
+		
+		ActivePoisons.Add(NewPoison);
+		
+		UE_LOG(LogTemp, Log, TEXT("Assassin: Applied poison (90 damage over 3s)"));
+	}
+}
+
+void URLComponent::UpdatePoisons(float DeltaTime)
+{
+	if (!OwnerCharacter)
+		return;
+
+	UWorld* World = OwnerCharacter->GetWorld();
+	if (!World)
+		return;
+
+	ACharacter* Player = UGameplayStatics::GetPlayerCharacter(World, 0);
+	AEnemyLogicManager* EnemyLogicMgr = Cast<AEnemyLogicManager>(
+		UGameplayStatics::GetActorOfClass(World, AEnemyLogicManager::StaticClass())
+	);
+
+	for (int32 i = ActivePoisons.Num() - 1; i >= 0; --i)
+	{
+		FPoisonEffect& Poison = ActivePoisons[i];
+		
+		Poison.TimeSinceLastTick += DeltaTime;
+		Poison.RemainingDuration -= DeltaTime;
+
+		// Tick damage
+		if (Poison.TimeSinceLastTick >= Poison.TickInterval)
+		{
+			// Record DPS for RL
+			RecordDamageDealt(Poison.DamagePerTick);
+
+			// Report poison damage to Enemy Logic Manager
+			if (EnemyLogicMgr && Player)
+			{
+				EnemyLogicMgr->ReportDamageToPlayer(Player, Poison.DamagePerTick, OwnerCharacter);
+				UE_LOG(LogTemp, Log, TEXT("Assassin poison tick: %.0f damage"), Poison.DamagePerTick);
+			}
+			
+			Poison.TimeSinceLastTick = 0.0f;
+		}
+
+		// Remove expired poisons
+		if (Poison.RemainingDuration <= 0.0f)
+		{
+			ActivePoisons.RemoveAt(i);
+			UE_LOG(LogTemp, Log, TEXT("Assassin poison expired"));
+		}
+	}
 }
