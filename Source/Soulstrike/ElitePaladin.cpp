@@ -7,7 +7,7 @@
 AElitePaladin::AElitePaladin()
 {
 	// Paladin stats
-	MaxHealth = 150.0f;  // High CurrentHealth tank
+	MaxHealth = 150.0f;  // High health tank
 	CurrentHealth = MaxHealth;
 	AttackDamage = 35.0f;  // Steady damage
 	MaxAttackRange = 500.0f;  // Melee range
