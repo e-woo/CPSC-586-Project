@@ -110,19 +110,19 @@ void URLComponent::Initialize(APawn* InPawn)
 		
 		if (PawnName.Contains("Archer"))
 		{
-			EliteBehavior = NewObject<UEliteArcher>(this, UEliteArcher::StaticClass());
+			EliteBehavior = NewObject<AEliteArcher>(this, AEliteArcher::StaticClass());
 		}
 		else if (PawnName.Contains("Assassin"))
 		{
-			EliteBehavior = NewObject<UEliteAssassin>(this, UEliteAssassin::StaticClass());
+			EliteBehavior = NewObject<AEliteAssassin>(this, AEliteAssassin::StaticClass());
 		}
 		else if (PawnName.Contains("Paladin"))
 		{
-			EliteBehavior = NewObject<UElitePaladin>(this, UElitePaladin::StaticClass());
+			EliteBehavior = NewObject<AElitePaladin>(this, AElitePaladin::StaticClass());
 		}
 		else if (PawnName.Contains("Giant"))
 		{
-			EliteBehavior = NewObject<UEliteGiant>(this, UEliteGiant::StaticClass());
+			EliteBehavior = NewObject<AEliteGiant>(this, AEliteGiant::StaticClass());
 		}
 		else if (PawnName.Contains("Healer"))
 		{
