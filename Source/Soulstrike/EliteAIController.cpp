@@ -45,24 +45,26 @@ void AEliteAIController::OnPossess(APawn* InPawn)
 	// If RLComponent wasn't set in Blueprint, create the correct one based on pawn type
 	if (!RLComponent && InPawn)
 	{
-		// Determine which RL component to create based on elite type
-		if (Cast<AEliteArcher>(InPawn))
+		// Determine which RL component to create based on pawn name (works with BP_Enemy parent)
+		FString PawnName = InPawn->GetName();
+		
+		if (PawnName.Contains("Archer"))
 		{
 			RLComponent = NewObject<UArcherRLComponent>(this, UArcherRLComponent::StaticClass(), TEXT("ArcherRLComponent"));
 		}
-		else if (Cast<AEliteAssassin>(InPawn))
+		else if (PawnName.Contains("Assassin"))
 		{
 			RLComponent = NewObject<UAssassinRLComponent>(this, UAssassinRLComponent::StaticClass(), TEXT("AssassinRLComponent"));
 		}
-		else if (Cast<AElitePaladin>(InPawn))
+		else if (PawnName.Contains("Paladin"))
 		{
 			RLComponent = NewObject<UPaladinRLComponent>(this, UPaladinRLComponent::StaticClass(), TEXT("PaladinRLComponent"));
 		}
-		else if (Cast<AEliteGiant>(InPawn))
+		else if (PawnName.Contains("Giant"))
 		{
 			RLComponent = NewObject<UGiantRLComponent>(this, UGiantRLComponent::StaticClass(), TEXT("GiantRLComponent"));
 		}
-		else if (Cast<AEliteHealer>(InPawn))
+		else if (PawnName.Contains("Healer"))
 		{
 			RLComponent = NewObject<UHealerRLComponent>(this, UHealerRLComponent::StaticClass(), TEXT("HealerRLComponent"));
 		}
@@ -76,7 +78,8 @@ void AEliteAIController::OnPossess(APawn* InPawn)
 		if (RLComponent)
 		{
 			RLComponent->RegisterComponent();
-			UE_LOG(LogTemp, Log, TEXT("EliteAIController: Created RL component type: %s"), *RLComponent->GetClass()->GetName());
+			UE_LOG(LogTemp, Log, TEXT("EliteAIController: Created RL component type: %s for %s"), 
+				*RLComponent->GetClass()->GetName(), *PawnName);
 		}
 	}
 

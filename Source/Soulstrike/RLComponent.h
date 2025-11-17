@@ -4,7 +4,28 @@
 #include "Components/ActorComponent.h"
 #include "RLComponent.generated.h"
 
+// Forward declarations
 class AEliteEnemy;
+class ACharacter;
+
+/** Poison damage-over-time effect (for Assassin) */
+USTRUCT()
+struct FPoisonEffect
+{
+	GENERATED_BODY()
+
+	float RemainingDuration;
+	float DamagePerTick;
+	float TickInterval;
+	float TimeSinceLastTick;
+
+	FPoisonEffect()
+		: RemainingDuration(0.0f)
+		, DamagePerTick(0.0f)
+		, TickInterval(0.5f)
+		, TimeSinceLastTick(0.0f)
+	{}
+};
 
 /**
  * Attack State Enumeration
@@ -28,7 +49,7 @@ enum class EEliteAction : uint8
 	Strafe_Left UMETA(DisplayName = "Strafe Left"),
 	Strafe_Right UMETA(DisplayName = "Strafe Right"),
 	Primary_Attack UMETA(DisplayName = "Primary Attack"),
-	Secondary_Attack UMETA(DisplayName = "Secondary Attack") // Heal for Healer, empty for others for now
+	Secondary_Attack UMETA(DisplayName = "Secondary Attack")
 };
 
 /**
@@ -175,9 +196,34 @@ protected:
 	/** Reference to the player character */
 	ACharacter* PlayerCharacter;
 
-	/** Reference to the owned elite enemy */
-	AEliteEnemy* OwnerElite;
+	/** Reference to the controlled character (BP_Enemy pawn) */
+	UPROPERTY()
+	ACharacter* OwnerCharacter;
 
+	/** Reference to C++ Elite behavior object (for attack logic) */
+	UPROPERTY()
+	AEliteEnemy* EliteBehavior;
+
+public:
+	// ========== ELITE STATS (accessible from AI controller) ==========
+
+	/** Attack damage - copied from Elite behavior object */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
+	float AttackDamage;
+
+	/** Max attack range - copied from Elite behavior object */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
+	float MaxAttackRange;
+
+	/** Attack windup duration - copied from Elite behavior object */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
+	float AttackWindupDuration;
+
+	/** Attack cooldown - copied from Elite behavior object */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
+	float AttackCooldown;
+
+protected:
 	// ========== Q-LEARNING WEIGHTS ==========
 
 	/** Weights for Q-value calculation: Action -> (FeatureName -> Weight) */
@@ -214,9 +260,12 @@ protected:
 	/** Timer for attack duration and cooldown */
 	float AttackTimer;
 
+	/** Cached player location when attack windup started (to check range on completion) */
+	FVector AttackWindupStartPlayerLocation;
+
 	/** Target ally for healing (Healer only) */
 	UPROPERTY()
-	AEliteEnemy* HealTarget;
+	ACharacter* HealTarget;
 
 	// ========== DELTA TRACKING ==========
 
@@ -225,6 +274,14 @@ protected:
 
 	/** Previous distance to player for delta calculation */
 	float PreviousDistanceToPlayer;
+
+	// ========== POISON TRACKING (for Assassin) ==========
+	
+	/** Active poison effects (for Assassin elite type) */
+	TArray<FPoisonEffect> ActivePoisons;
+
+	/** Update poison ticks (called every frame for Assassin) */
+	void UpdatePoisons(float DeltaTime);
 
 public:
 	/** Record damage dealt to player */
@@ -246,7 +303,7 @@ public:
 	bool JustAttacked() const;
 
 	/** Find the N closest allies (made public for Healer secondary attack) */
-	void FindClosestAllies(TArray<AEliteEnemy*>& OutAllies, int32 NumAllies = 3);
+	void FindClosestAllies(TArray<ACharacter*>& OutAllies, int32 NumAllies = 3);
 
 	/** How long to stick with an action before allowing change (smoother movement) */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "RL|Movement")
@@ -296,4 +353,17 @@ protected:
 
 	/** Debug visualization */
 	void DebugDraw();
+
+	/** Get health percentage from Blueprint variables */
+	float GetCharacterHealthPercentage(ACharacter* Character) const;
+
+	/** Check if character is alive */
+	bool IsCharacterAlive(ACharacter* Character) const;
+
+	/** Call attack on the C++ Elite behavior object */
+	void PerformPrimaryAttackOnElite();
+	void PerformSecondaryAttackOnElite();
+
+	/** Called when attack windup completes - applies damage if player still in range */
+	void OnAttackWindupComplete();
 };

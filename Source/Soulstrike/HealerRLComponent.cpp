@@ -2,7 +2,7 @@
 
 float UHealerRLComponent::CalculateReward()
 {
-	if (!OwnerElite)
+	if (!OwnerCharacter)
 		return 0.0f;
 
 	float Reward = 0.0f;

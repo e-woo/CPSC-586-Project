@@ -1,9 +1,9 @@
 #include "PaladinRLComponent.h"
-#include "EliteHealer.h"
+#include "GameFramework/Character.h"
 
 float UPaladinRLComponent::CalculateReward()
 {
-	if (!OwnerElite)
+	if (!OwnerCharacter)
 		return 0.0f;
 
 	float Reward = 0.0f;
@@ -42,18 +42,18 @@ float UPaladinRLComponent::CalculateReward()
 	Reward += DeltaHealth * 10.0f;
 
 	// === HEALER PROTECTION (Static) ===
-	TArray<AEliteEnemy*> ClosestAllies;
+	TArray<ACharacter*> ClosestAllies;
 	FindClosestAllies(ClosestAllies, 3);
 
-	AEliteHealer* Healer = nullptr;
+	ACharacter* Healer = nullptr;
 	float DistanceToHealer = 9999.0f;
 	
-	for (AEliteEnemy* Ally : ClosestAllies)
+	for (ACharacter* Ally : ClosestAllies)
 	{
-		if (Cast<AEliteHealer>(Ally))
+		if (Ally && Ally->GetName().Contains("Healer"))
 		{
-			Healer = Cast<AEliteHealer>(Ally);
-			DistanceToHealer = FVector::Dist(OwnerElite->GetActorLocation(), Ally->GetActorLocation());
+			Healer = Ally;
+			DistanceToHealer = FVector::Dist(OwnerCharacter->GetActorLocation(), Ally->GetActorLocation());
 			break;
 		}
 	}
@@ -62,7 +62,7 @@ float UPaladinRLComponent::CalculateReward()
 	{
 		// Reward for being between player and healer
 		float DistPlayerToHealer = FVector::Dist(CachedPlayerLocation, Healer->GetActorLocation());
-		float DistSelfToPlayer = FVector::Dist(OwnerElite->GetActorLocation(), CachedPlayerLocation);
+		float DistSelfToPlayer = FVector::Dist(OwnerCharacter->GetActorLocation(), CachedPlayerLocation);
 
 		if (DistanceToHealer < DistPlayerToHealer && DistSelfToPlayer < DistPlayerToHealer) {
 			Reward += 10.0f;  // Excellent bodyguard position

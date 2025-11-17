@@ -8,13 +8,13 @@ AEliteArcher::AEliteArcher()
 {
 	// Archer stats
 	MaxHealth = 90.0f;
-	Health = MaxHealth;
+	CurrentHealth = MaxHealth;
 	AttackDamage = 50.0f;  // Burst damage per shot
 	MaxAttackRange = 2000.0f;  // Long range
 
 	// Archer attack timing: Fast shots
 	// DPS = 50 / (0.4 + 0.1) = 100
-	AttackDuration = 0.1f;  // Quick shot
+	AttackWindupDuration = 0.1f;  // Quick shot
 	AttackCooldown = 0.4f;  // Fast fire rate
 
 	// Movement

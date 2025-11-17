@@ -26,7 +26,7 @@ public:
 	
 	/** Current health of the elite */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
-	float Health;
+	float CurrentHealth;
 
 	/** Maximum health of the elite */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Stats")
@@ -42,9 +42,9 @@ public:
 
 	// ========== ATTACK TIMING ==========
 
-	/** How long the attack animation/action takes */
+	/** How long before attack damage applies (animation windup) - allows dodging */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat")
-	float AttackDuration;
+	float AttackWindupDuration;
 
 	/** Cooldown between attacks */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat")
