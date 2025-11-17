@@ -11,6 +11,12 @@
 
 TSubclassOf<AActor> EnemyActorClass;
 
+TSubclassOf<AActor> EliteArcherActorClass;
+TSubclassOf<AActor> EliteAssassinActorClass;
+TSubclassOf<AActor> EliteGiantActorClass;
+TSubclassOf<AActor> EliteHealerActorClass;
+TSubclassOf<AActor> ElitePaladinActorClass;
+
 // Sets default values
 ADirector::ADirector()
 {
@@ -30,6 +36,16 @@ void ADirector::BeginPlay()
 	}
 
 	LoadBP::LoadClass("/Game/Enemy/BP_Enemy.BP_Enemy_C", EnemyActorClass);
+
+	auto LoadEliteClass = [](std::string BpClass, TSubclassOf<AActor> Class) {
+		LoadBP::LoadClass("/Game/ThirdPersonBP/Blueprints/EliteAI/" + BpClass + "." + BpClass + "_C", Class);
+	};
+
+	LoadEliteClass("BP_EliteArcher", EliteArcherActorClass);
+	LoadEliteClass("BP_EliteAssassin", EliteAssassinActorClass);
+	LoadEliteClass("BP_EliteGiant", EliteGiantActorClass);
+	LoadEliteClass("BP_EliteHealer", EliteHealerActorClass);
+	LoadEliteClass("BP_ElitePaladin", ElitePaladinActorClass);
 
 	FTimerHandle DirectorTimerHandle;
 	FTimerDelegate DirectorDelegate;
