@@ -20,11 +20,11 @@ AActor* Spawn::SpawnActor(UWorld* World, UClass* Class, const FVector Origin, co
 	}
 
 	SpawnLocation += SpawnOffset;
-	UE_LOG(LogTemp, Display, TEXT("Spawning at: %f, %f, %f"), SpawnLocation.X, SpawnLocation.Y, SpawnLocation.Z);
 	AActor* NewActor = World->SpawnActor<AActor>(Class, SpawnLocation, SpawnRotation, SpawnParams);
 	if (!NewActor)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Attempted to spawn actor of type %s at %s but failed."), *Class->GetName(), *SpawnLocation.ToString());
+		const TCHAR* ClassName = Class ? *Class->GetName() : TEXT("NULL CLASS");
+		UE_LOG(LogTemp, Warning, TEXT("Attempted to spawn actor of type %s at %s but failed."), ClassName, *SpawnLocation.ToString());
 	}
 	return NewActor;
 }
