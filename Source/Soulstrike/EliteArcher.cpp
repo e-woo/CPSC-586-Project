@@ -6,19 +6,7 @@
 
 AEliteArcher::AEliteArcher()
 {
-	// Archer stats
-	MaxHealth = 90.0f;
-	CurrentHealth = MaxHealth;
-	AttackDamage = 50.0f;  // Burst damage per shot
-	MaxAttackRange = 2000.0f;  // Long range
-
-	// Archer attack timing: Fast shots
-	// DPS = 50 / (0.4 + 0.1) = 100
-	AttackWindupDuration = 0.1f;  // Quick shot
-	AttackCooldown = 0.4f;  // Fast fire rate
-
-	// Movement
-	GetCharacterMovement()->MaxWalkSpeed = 450.0f; // Medium speed
+	// Moved to Blueprint
 }
 
 void AEliteArcher::PerformPrimaryAttack()
@@ -26,7 +14,7 @@ void AEliteArcher::PerformPrimaryAttack()
 	Super::PerformPrimaryAttack();
 
 	// Archer ranged attack
-	UE_LOG(LogTemp, Log, TEXT("Archer: Fired arrow! (%.0f damage)"), AttackDamage);
+	UE_LOG(LogTemp, Log, TEXT("Archer: Fired arrow!"));
 
 	// Get RLComponent to record damage
 	URLComponent* RLComp = FindComponentByClass<URLComponent>();
