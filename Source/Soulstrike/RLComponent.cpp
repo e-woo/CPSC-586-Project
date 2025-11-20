@@ -459,19 +459,19 @@ void URLComponent::ExecuteAction(EEliteAction Action, float DeltaTime)
 		if (AttackState == EAttackState::Normal && !CurrentState.bIsBeyondMaxRange)
 		{
 			PerformPrimaryAttackOnElite();
-			AttackState = EAttackState::Attacking;
-			AttackTimer = 0.0f;
-			TimeSinceLastPrimaryAttack = 0.0f;
+			// Only reset TimeSinceLastPrimaryAttack if attack actually started (state changed)
+			if (AttackState == EAttackState::Attacking)
+			{
+				TimeSinceLastPrimaryAttack = 0.0f;
+			}
 		}
 		break;
 	}
 	case EEliteAction::Secondary_Attack:
 	{
-		if (AttackState == EAttackState::Normal && !CurrentState.bIsBeyondMaxRange)
+		if (AttackState == EAttackState::Normal)
 		{
 			PerformSecondaryAttackOnElite();
-			AttackState = EAttackState::Attacking;
-			AttackTimer = 0.0f;
 		}
 		break;
 	}
@@ -845,6 +845,25 @@ void URLComponent::PerformPrimaryAttackOnElite()
 	// Start windup - cache player location for later check
 	AttackWindupStartPlayerLocation = Player->GetActorLocation();
 	
+	// Set attack state (after range check passed)
+	AttackState = EAttackState::Attacking;
+	AttackTimer = 0.0f;
+	
+	// Trigger Blueprint custom event "OnAttackStart" with WindupDuration parameter
+	UFunction* AttackStartFunc = OwnerCharacter->FindFunction(FName("OnAttackStart"));
+	if (AttackStartFunc)
+	{
+		struct FAttackStartParams
+		{
+			float WindupDuration;
+		};
+		
+		FAttackStartParams Params;
+		Params.WindupDuration = AttackWindupDuration;
+		
+		OwnerCharacter->ProcessEvent(AttackStartFunc, &Params);
+	}
+	
 	UE_LOG(LogTemp, Log, TEXT("%s: Starting attack windup (%.2fs)..."), 
 		*OwnerCharacter->GetName(), AttackWindupDuration);
 }
@@ -855,7 +874,7 @@ void URLComponent::PerformSecondaryAttackOnElite()
 		return;
 
 	// For now, only Healer has secondary attack (heal)
-	if (EliteBehavior->IsA(AEliteHealer::StaticClass()))
+	if (EliteBehavior && EliteBehavior->IsA(AEliteHealer::StaticClass()))
 	{
 		// Read HealAmount from Blueprint
 		FProperty* HealAmountProp = OwnerCharacter->GetClass()->FindPropertyByName(TEXT("HealAmount"));
@@ -895,6 +914,25 @@ void URLComponent::PerformSecondaryAttackOnElite()
 
 		if (BestTarget)
 		{
+			// Set attack state (before triggering animation)
+			AttackState = EAttackState::Attacking;
+			AttackTimer = 0.0f;
+			
+			// Trigger Blueprint custom event "OnSecondaryStart" with WindupDuration parameter
+			UFunction* SecondaryStartFunc = OwnerCharacter->FindFunction(FName("OnSecondaryStart"));
+			if (SecondaryStartFunc)
+			{
+				struct FSecondaryStartParams
+				{
+					float WindupDuration;
+				};
+				
+				FSecondaryStartParams Params;
+				Params.WindupDuration = AttackWindupDuration;
+				
+				OwnerCharacter->ProcessEvent(SecondaryStartFunc, &Params);
+			}
+
 			// Heal the ally
 			FProperty* CurrentHealthProp = BestTarget->GetClass()->FindPropertyByName(TEXT("CurrentHealth"));
 			FProperty* MaxHealthProp = BestTarget->GetClass()->FindPropertyByName(TEXT("MaxHealth"));
@@ -959,7 +997,7 @@ void URLComponent::OnAttackWindupComplete()
 	}
 
 	// Special case: Assassin applies poison on hit
-	if (EliteBehavior->IsA(AEliteAssassin::StaticClass()))
+	if (EliteBehavior && EliteBehavior->IsA(AEliteAssassin::StaticClass()))
 	{
 		// Apply poison (90 damage over 3 seconds)
 		FPoisonEffect NewPoison;

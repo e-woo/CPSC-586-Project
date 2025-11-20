@@ -5,9 +5,8 @@
 #include "EliteAssassin.generated.h"
 
 /**
- * Elite Assassin - Fast melee attacker with poison
- * Prefers close-mid range combat
- * Poison is handled by RLComponent
+ * Elite Assassin - Fast melee with poison
+ * Applies damage over time
  */
 UCLASS()
 class SOULSTRIKE_API AEliteAssassin : public AEliteEnemy
@@ -16,7 +15,4 @@ class SOULSTRIKE_API AEliteAssassin : public AEliteEnemy
 
 public:
 	AEliteAssassin();
-
-	virtual void Tick(float DeltaTime) override;
-	virtual void PerformPrimaryAttack() override;
 };

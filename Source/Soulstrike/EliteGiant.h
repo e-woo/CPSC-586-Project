@@ -5,8 +5,8 @@
 #include "EliteGiant.generated.h"
 
 /**
- * Elite Giant - Super tank
- * Highest health, very slow, deals massive damage
+ * Elite Giant - Slow but powerful
+ * High damage, long cooldown
  */
 UCLASS()
 class SOULSTRIKE_API AEliteGiant : public AEliteEnemy
@@ -15,6 +15,4 @@ class SOULSTRIKE_API AEliteGiant : public AEliteEnemy
 
 public:
 	AEliteGiant();
-
-	virtual void PerformPrimaryAttack() override;
 };

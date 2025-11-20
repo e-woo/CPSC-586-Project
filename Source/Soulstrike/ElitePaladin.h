@@ -15,6 +15,4 @@ class SOULSTRIKE_API AElitePaladin : public AEliteEnemy
 
 public:
 	AElitePaladin();
-
-	virtual void PerformPrimaryAttack() override;
 };

@@ -15,7 +15,4 @@ class SOULSTRIKE_API AEliteHealer : public AEliteEnemy
 
 public:
 	AEliteHealer();
-
-	virtual void PerformPrimaryAttack() override;
-	virtual void PerformSecondaryAttack() override;
 };
