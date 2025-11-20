@@ -88,67 +88,77 @@ void URLComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 void URLComponent::Initialize(APawn* InPawn)
 {
 	OwnerCharacter = Cast<ACharacter>(InPawn);
-	if (OwnerCharacter)
-	{
-		// Get initial health from Blueprint variable "CurrentHealth"
-		FProperty* HealthProperty = OwnerCharacter->GetClass()->FindPropertyByName(TEXT("CurrentHealth"));
-		if (HealthProperty)
+	if (!OwnerCharacter)
+		return;
+
+	UClass* CharacterClass = OwnerCharacter->GetClass();
+
+	// Helper lambda to read float property from Blueprint
+	auto ReadFloatProperty = [CharacterClass](ACharacter* Character, const FName& PropertyName, float DefaultValue) -> float {
+		FProperty* Property = CharacterClass->FindPropertyByName(PropertyName);
+		if (Property)
 		{
-			float* HealthPtr = HealthProperty->ContainerPtrToValuePtr<float>(OwnerCharacter);
-			if (HealthPtr)
+			float* ValuePtr = Property->ContainerPtrToValuePtr<float>(Character);
+			if (ValuePtr)
 			{
-				PreviousHealth = *HealthPtr;
+				return *ValuePtr;
 			}
 		}
-		else
-		{
-			PreviousHealth = 100.0f;
-		}
+		return DefaultValue;
+	};
 
-		// Detect elite type by name and create corresponding C++ behavior object
-		FString PawnName = InPawn->GetName();
-		
-		if (PawnName.Contains("Archer"))
-		{
-			EliteBehavior = NewObject<AEliteArcher>(this, AEliteArcher::StaticClass());
-		}
-		else if (PawnName.Contains("Assassin"))
-		{
-			EliteBehavior = NewObject<AEliteAssassin>(this, AEliteAssassin::StaticClass());
-		}
-		else if (PawnName.Contains("Paladin"))
-		{
-			EliteBehavior = NewObject<AElitePaladin>(this, AElitePaladin::StaticClass());
-		}
-		else if (PawnName.Contains("Giant"))
-		{
-			EliteBehavior = NewObject<AEliteGiant>(this, AEliteGiant::StaticClass());
-		}
-		else if (PawnName.Contains("Healer"))
-		{
-			EliteBehavior = NewObject<AEliteHealer>(this, AEliteHealer::StaticClass());
-		}
-		else
-		{
-			// Fallback to base
-			EliteBehavior = NewObject<AEliteEnemy>(this, AEliteEnemy::StaticClass());
-		}
+	// Read all stats from Blueprint
+	PreviousHealth = ReadFloatProperty(OwnerCharacter, TEXT("CurrentHealth"), 100.0f);
+	AttackDamage = ReadFloatProperty(OwnerCharacter, TEXT("AttackDamage"), 10.0f);
+	MaxAttackRange = ReadFloatProperty(OwnerCharacter, TEXT("MaxAttackRange"), 500.0f);
+	AttackWindupDuration = ReadFloatProperty(OwnerCharacter, TEXT("AttackWindupDuration"), 0.3f);
+	AttackCooldown = ReadFloatProperty(OwnerCharacter, TEXT("AttackCooldown"), 0.5f);
+	float MovementSpeed = ReadFloatProperty(OwnerCharacter, TEXT("MovementSpeed"), 400.0f);
 
-		// Copy stats from behavior object
-		if (EliteBehavior)
-		{
-			AttackDamage = EliteBehavior->AttackDamage;
-			MaxAttackRange = EliteBehavior->MaxAttackRange;
-			AttackWindupDuration = EliteBehavior->AttackWindupDuration;
-			AttackCooldown = EliteBehavior->AttackCooldown;
-
-			UE_LOG(LogTemp, Log, TEXT("RLComponent: Created %s behavior for %s (Damage: %.0f, Range: %.0f)"),
-				*EliteBehavior->GetClass()->GetName(), *PawnName, AttackDamage, MaxAttackRange);
-		}
-
-		UE_LOG(LogTemp, Log, TEXT("RLComponent: Initialized with character %s (Initial HP: %.1f)"), 
-			*OwnerCharacter->GetName(), PreviousHealth);
+	// Apply movement speed to CharacterMovementComponent
+	UCharacterMovementComponent* MovementComp = OwnerCharacter->GetCharacterMovement();
+	if (MovementComp)
+	{
+		MovementComp->MaxWalkSpeed = MovementSpeed;
 	}
+
+	// Detect elite type by name for behavior logic (poison, healing, etc.)
+	FString PawnName = InPawn->GetName();
+	
+	UClass* EliteClass = nullptr;
+	if (PawnName.Contains("Archer"))
+	{
+		EliteClass = AEliteArcher::StaticClass();
+	}
+	else if (PawnName.Contains("Assassin"))
+	{
+		EliteClass = AEliteAssassin::StaticClass();
+	}
+	else if (PawnName.Contains("Paladin"))
+	{
+		EliteClass = AElitePaladin::StaticClass();
+	}
+	else if (PawnName.Contains("Giant"))
+	{
+		EliteClass = AEliteGiant::StaticClass();
+	}
+	else if (PawnName.Contains("Healer"))
+	{
+		EliteClass = AEliteHealer::StaticClass();
+	}
+	else
+	{
+		EliteClass = AEliteEnemy::StaticClass();
+	}
+
+	// Store elite class for type checking (poison, healing)
+	if (EliteClass)
+	{
+		EliteBehavior = Cast<AEliteEnemy>(EliteClass->GetDefaultObject());
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("RLComponent: Initialized %s (HP: %.0f, Damage: %.0f, Range: %.0f, Speed: %.0f, Windup: %.2fs, Cooldown: %.2fs)"), 
+		*OwnerCharacter->GetName(), PreviousHealth, AttackDamage, MaxAttackRange, MovementSpeed, AttackWindupDuration, AttackCooldown);
 }
 
 void URLComponent::ExecuteRLStep(float DeltaTime)
@@ -449,19 +459,19 @@ void URLComponent::ExecuteAction(EEliteAction Action, float DeltaTime)
 		if (AttackState == EAttackState::Normal && !CurrentState.bIsBeyondMaxRange)
 		{
 			PerformPrimaryAttackOnElite();
-			AttackState = EAttackState::Attacking;
-			AttackTimer = 0.0f;
-			TimeSinceLastPrimaryAttack = 0.0f;
+			// Only reset TimeSinceLastPrimaryAttack if attack actually started (state changed)
+			if (AttackState == EAttackState::Attacking)
+			{
+				TimeSinceLastPrimaryAttack = 0.0f;
+			}
 		}
 		break;
 	}
 	case EEliteAction::Secondary_Attack:
 	{
-		if (AttackState == EAttackState::Normal && !CurrentState.bIsBeyondMaxRange)
+		if (AttackState == EAttackState::Normal)
 		{
 			PerformSecondaryAttackOnElite();
-			AttackState = EAttackState::Attacking;
-			AttackTimer = 0.0f;
 		}
 		break;
 	}
@@ -835,6 +845,25 @@ void URLComponent::PerformPrimaryAttackOnElite()
 	// Start windup - cache player location for later check
 	AttackWindupStartPlayerLocation = Player->GetActorLocation();
 	
+	// Set attack state (after range check passed)
+	AttackState = EAttackState::Attacking;
+	AttackTimer = 0.0f;
+	
+	// Trigger Blueprint custom event "OnAttackStart" with WindupDuration parameter
+	UFunction* AttackStartFunc = OwnerCharacter->FindFunction(FName("OnAttackStart"));
+	if (AttackStartFunc)
+	{
+		struct FAttackStartParams
+		{
+			float WindupDuration;
+		};
+		
+		FAttackStartParams Params;
+		Params.WindupDuration = AttackWindupDuration;
+		
+		OwnerCharacter->ProcessEvent(AttackStartFunc, &Params);
+	}
+	
 	UE_LOG(LogTemp, Log, TEXT("%s: Starting attack windup (%.2fs)..."), 
 		*OwnerCharacter->GetName(), AttackWindupDuration);
 }
@@ -845,8 +874,20 @@ void URLComponent::PerformSecondaryAttackOnElite()
 		return;
 
 	// For now, only Healer has secondary attack (heal)
-	if (EliteBehavior->IsA(AEliteHealer::StaticClass()))
+	if (EliteBehavior && EliteBehavior->IsA(AEliteHealer::StaticClass()))
 	{
+		// Read HealAmount from Blueprint
+		FProperty* HealAmountProp = OwnerCharacter->GetClass()->FindPropertyByName(TEXT("HealAmount"));
+		float HealAmount = 50.0f; // Default
+		if (HealAmountProp)
+		{
+			float* HealAmountPtr = HealAmountProp->ContainerPtrToValuePtr<float>(OwnerCharacter);
+			if (HealAmountPtr)
+			{
+				HealAmount = *HealAmountPtr;
+			}
+		}
+
 		// Find lowest HP ally and heal them
 		TArray<ACharacter*> ClosestAllies;
 		FindClosestAllies(ClosestAllies, 3);
@@ -873,8 +914,26 @@ void URLComponent::PerformSecondaryAttackOnElite()
 
 		if (BestTarget)
 		{
+			// Set attack state (before triggering animation)
+			AttackState = EAttackState::Attacking;
+			AttackTimer = 0.0f;
+			
+			// Trigger Blueprint custom event "OnSecondaryStart" with WindupDuration parameter
+			UFunction* SecondaryStartFunc = OwnerCharacter->FindFunction(FName("OnSecondaryStart"));
+			if (SecondaryStartFunc)
+			{
+				struct FSecondaryStartParams
+				{
+					float WindupDuration;
+				};
+				
+				FSecondaryStartParams Params;
+				Params.WindupDuration = AttackWindupDuration;
+				
+				OwnerCharacter->ProcessEvent(SecondaryStartFunc, &Params);
+			}
+
 			// Heal the ally
-			float HealAmount = Cast<AEliteHealer>(EliteBehavior)->HealAmount;
 			FProperty* CurrentHealthProp = BestTarget->GetClass()->FindPropertyByName(TEXT("CurrentHealth"));
 			FProperty* MaxHealthProp = BestTarget->GetClass()->FindPropertyByName(TEXT("MaxHealth"));
 			if (CurrentHealthProp && MaxHealthProp)
@@ -938,7 +997,7 @@ void URLComponent::OnAttackWindupComplete()
 	}
 
 	// Special case: Assassin applies poison on hit
-	if (EliteBehavior->IsA(AEliteAssassin::StaticClass()))
+	if (EliteBehavior && EliteBehavior->IsA(AEliteAssassin::StaticClass()))
 	{
 		// Apply poison (90 damage over 3 seconds)
 		FPoisonEffect NewPoison;

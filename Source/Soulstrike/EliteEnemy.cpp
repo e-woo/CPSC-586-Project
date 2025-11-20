@@ -6,17 +6,6 @@ AEliteEnemy::AEliteEnemy()
 {
 	PrimaryActorTick.bCanEverTick = true;
 
-	// Default stats
-	MaxHealth = 100.0f;
-	CurrentHealth = MaxHealth;
-	AttackDamage = 10.0f;
-	MaxAttackRange = 500.0f;
-
-	// Default attack timing (will be overridden by subclasses)
-	AttackWindupDuration = 0.1f;
-	AttackCooldown = 0.5f;
-	HealAmount = 0.0f;
-
 	// Configure character movement
 	UCharacterMovementComponent* CharMoveComp = GetCharacterMovement();
 	if (CharMoveComp)
@@ -49,7 +38,7 @@ AEliteEnemy::AEliteEnemy()
 void AEliteEnemy::BeginPlay()
 {
 	Super::BeginPlay();
-	CurrentHealth = MaxHealth;
+	// Health initialization handled by Blueprint
 }
 
 void AEliteEnemy::Tick(float DeltaTime)

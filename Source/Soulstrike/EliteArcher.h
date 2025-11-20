@@ -15,6 +15,4 @@ class SOULSTRIKE_API AEliteArcher : public AEliteEnemy
 
 public:
 	AEliteArcher();
-
-	virtual void PerformPrimaryAttack() override;
 };
