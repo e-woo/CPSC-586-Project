@@ -66,11 +66,12 @@ void ADirector::Tick(float DeltaTime)
 void ADirector::TickDirector()
 {
 	ReceiveSpawnCredits();
+	int BaseChance = 50 + PlayerCharacter->Level;
 
 	// Attempt to spawn enemies every 10 seconds
 	if (TickNum >= 10)
 	{
-		if (FMath::RandRange(1, 100) <= 50 + SpawnChanceBonus)
+		if (FMath::RandRange(1, 100) <= BaseChance + SpawnChanceBonus)
 		{
 			if (SpawnCredits >= EliteSpawnCost && FMath::RandRange(1, 100) <= 25 + SpawnEliteChanceBonus)
 			{
@@ -114,8 +115,12 @@ void ADirector::ReceiveSpawnCredits()
 
 void ADirector::SpawnSwarmEnemies()
 {
-	// Pack size: minimum 3, maximum 10
-	int EnemiesToSpawn = FMath::RandRange(3, 10);
+	int MaxEnemyCount =
+		(PlayerCharacter->Level < 5) ? 5 :
+		(PlayerCharacter->Level < 10) ? 10 :
+		15;
+
+	int EnemiesToSpawn = FMath::RandRange(3, MaxEnemyCount);
 	EnemiesToSpawn = FMath::Min(EnemiesToSpawn, SpawnCredits / EnemySpawnCost);
 
 	UE_LOG(LogTemp, Display, TEXT("Spawning %d enemies."), EnemiesToSpawn);
@@ -141,7 +146,10 @@ void ADirector::SpawnSwarmEnemies()
 
 void ADirector::SpawnEliteEnemies()
 {
-	int EnemiesToSpawn = FMath::RandRange(1, 2);
+	int EnemiesToSpawn = (PlayerCharacter->Level < 5) ? 1 :
+		(PlayerCharacter->Level < 10) ? 2 :
+		(PlayerCharacter->Level < 20) ? 3 :
+		4;
 	EnemiesToSpawn = FMath::Min(EnemiesToSpawn, SpawnCredits / EliteSpawnCost);
 
 	for (int i = 0; i < EnemiesToSpawn; i++)
