@@ -125,7 +125,7 @@ void ADirector::SpawnSwarmEnemies()
 	FVector SpawnLocation = ChooseEnemySpawnLocation(PlayerLocation, SpawnRadius, 3000.f);
 
 	UWorld* World = GetWorld();
-	FName Path = FName("SwarmEnemies/Pack_" + FString::FromInt(SwarmPackNum++));
+	FName Path = FName("Enemies/SwarmEnemies/Pack_" + FString::FromInt(SwarmPackNum++));
 	for (int i = 0; i < EnemiesToSpawn; i++)
 	{
 		FActorSpawnParameters SpawnParams;
@@ -156,7 +156,7 @@ void ADirector::SpawnEliteEnemies()
 		AActor* NewElite = Spawn::SpawnActor(World, SelectedEliteClass, SpawnLocation, FVector(500.f, 500.f, 10000.f), 0, 60.f, false, SpawnParams, FVector(0, 0, 100));
 		if (NewElite)
 		{
-			NewElite->SetFolderPath("EliteEnemies");
+			NewElite->SetFolderPath("Enemies/EliteEnemies");
 		}
 	}
 	SpawnCredits -= EnemiesToSpawn * EliteSpawnCost;
