@@ -162,7 +162,7 @@ void ADirector::SpawnEliteEnemies()
 
 	TSubclassOf<AActor> SelectedEliteClass = AvailableEliteClasses[FMath::RandRange(0, AvailableEliteClasses.Num() - 1)];
 	FVector PlayerLocation = PlayerCharacter->GetActorLocation();
-	FVector SpawnLocation = ChooseEnemySpawnLocation(PlayerLocation, 3000.f, 4000.f);
+	FVector SpawnLocation = ChooseEnemySpawnLocation(PlayerLocation, 3000.f, 2000.f);
 
 	UWorld* World = GetWorld();
 
