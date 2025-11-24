@@ -66,11 +66,12 @@ void ADirector::Tick(float DeltaTime)
 void ADirector::TickDirector()
 {
 	ReceiveSpawnCredits();
+	int BaseChance = 50 + PlayerCharacter->Level;
 
 	// Attempt to spawn enemies every 10 seconds
 	if (TickNum >= 10)
 	{
-		if (FMath::RandRange(1, 100) <= 50 + SpawnChanceBonus)
+		if (FMath::RandRange(1, 100) <= BaseChance + SpawnChanceBonus)
 		{
 			if (SpawnCredits >= EliteSpawnCost && FMath::RandRange(1, 100) <= 25 + SpawnEliteChanceBonus)
 			{
@@ -114,8 +115,12 @@ void ADirector::ReceiveSpawnCredits()
 
 void ADirector::SpawnSwarmEnemies()
 {
-	// Pack size: minimum 3, maximum 10
-	int EnemiesToSpawn = FMath::RandRange(3, 10);
+	int MaxEnemyCount =
+		(PlayerCharacter->Level < 5) ? 5 :
+		(PlayerCharacter->Level < 10) ? 10 :
+		15;
+
+	int EnemiesToSpawn = FMath::RandRange(3, MaxEnemyCount);
 	EnemiesToSpawn = FMath::Min(EnemiesToSpawn, SpawnCredits / EnemySpawnCost);
 
 	UE_LOG(LogTemp, Display, TEXT("Spawning %d enemies."), EnemiesToSpawn);
@@ -125,7 +130,7 @@ void ADirector::SpawnSwarmEnemies()
 	FVector SpawnLocation = ChooseEnemySpawnLocation(PlayerLocation, SpawnRadius, 3000.f);
 
 	UWorld* World = GetWorld();
-	FName Path = FName("SwarmEnemies/Pack_" + FString::FromInt(SwarmPackNum++));
+	FName Path = FName("Enemies/SwarmEnemies/Pack_" + FString::FromInt(SwarmPackNum++));
 	for (int i = 0; i < EnemiesToSpawn; i++)
 	{
 		FActorSpawnParameters SpawnParams;
@@ -141,25 +146,33 @@ void ADirector::SpawnSwarmEnemies()
 
 void ADirector::SpawnEliteEnemies()
 {
-	int EnemiesToSpawn = FMath::RandRange(1, 2);
-	EnemiesToSpawn = FMath::Min(EnemiesToSpawn, SpawnCredits / EliteSpawnCost);
-
-	for (int i = 0; i < EnemiesToSpawn; i++)
+	TArray<TSubclassOf<AActor>> AvailableEliteClasses;
+	for (auto& EliteClass : EliteClasses)
 	{
-		TSubclassOf<AActor> SelectedEliteClass = EliteClasses[FMath::RandRange(0, EliteClasses.Num() - 1)];
-		FVector PlayerLocation = PlayerCharacter->GetActorLocation();
-		FVector SpawnLocation = ChooseEnemySpawnLocation(PlayerLocation, 3000.f, 4000.f);
-
-		UWorld* World = GetWorld();
-
-		FActorSpawnParameters SpawnParams;
-		AActor* NewElite = Spawn::SpawnActor(World, SelectedEliteClass, SpawnLocation, FVector(500.f, 500.f, 10000.f), 0, 60.f, false, SpawnParams, FVector(0, 0, 100));
-		if (NewElite)
+		if (CountActors(*EliteClass) == 0)
 		{
-			NewElite->SetFolderPath("EliteEnemies");
+			AvailableEliteClasses.Add(EliteClass);
 		}
 	}
-	SpawnCredits -= EnemiesToSpawn * EliteSpawnCost;
+	if (AvailableEliteClasses.Num() == 0)
+	{
+		SpawnSwarmEnemies();
+		return;
+	}
+
+	TSubclassOf<AActor> SelectedEliteClass = AvailableEliteClasses[FMath::RandRange(0, AvailableEliteClasses.Num() - 1)];
+	FVector PlayerLocation = PlayerCharacter->GetActorLocation();
+	FVector SpawnLocation = ChooseEnemySpawnLocation(PlayerLocation, 3000.f, 2000.f);
+
+	UWorld* World = GetWorld();
+
+	FActorSpawnParameters SpawnParams;
+	AActor* NewElite = Spawn::SpawnActor(World, SelectedEliteClass, SpawnLocation, FVector(500.f, 500.f, 10000.f), 0, 60.f, false, SpawnParams, FVector(0, 0, 100));
+	if (NewElite)
+	{
+		NewElite->SetFolderPath("Enemies/EliteEnemies");
+	}
+	SpawnCredits -= EliteSpawnCost;
 }
 
 FVector ADirector::ChooseEnemySpawnLocation(FVector Origin, float Radius, float MinDistance)
