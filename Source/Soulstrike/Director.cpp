@@ -28,8 +28,8 @@ void ADirector::BeginPlay()
 		UE_LOG(LogTemp, Warning, TEXT("Player character not found in LevelScriptActorBase."));
 	}
 
-	LoadBP::LoadClass("/Game/Enemy/BP_Enemy.BP_Enemy_C", EnemyActorClass);
-
+	LoadBP::LoadClass("/Game/ThirdPersonBP/Blueprints/SwarmAI/BP_SwarmEnemy.BP_SwarmEnemy_C", EnemyActorClass);
+	
 	LoadEliteClasses();
 
 	FTimerHandle DirectorTimerHandle;
@@ -209,6 +209,10 @@ FVector ADirector::ChooseEnemySpawnLocation(FVector Origin, float Radius, float 
 
 int ADirector::CountActors(UClass* Class)
 {
+	if (!Class)
+	{
+		return 0;
+	}
 	int Count = 0;
 	UWorld* World = GetWorld();
 	for (TActorIterator<AActor> It(World, Class); It; ++It)
