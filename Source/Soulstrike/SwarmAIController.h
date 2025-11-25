@@ -31,8 +31,16 @@ public:
 	// Called when the controller unpossesses a pawn
 	virtual void OnUnPossess() override;
 
-protected:
-	/** Reference to the possessed swarm enemy */
-	UPROPERTY(BlueprintReadOnly, Category = "Swarm AI")
-	class ASwarmEnemy* ControlledEnemy;
+private:
+	void MoveSwarms();
+	
+	static TMap<FString, TArray<TWeakObjectPtr<ACharacter>>> SwarmMap;
+
+	const float SeparationDistance = 600.f;
+	const float CohesionWeight = 0.8f;
+	const float AlignmentWeight = 0.5f;
+	const float SeparationWeight = 0.7f;
+	const float TargetWeight = 0.5f;
+
+	const float TargetEngageDistance = 2000.f;
 };

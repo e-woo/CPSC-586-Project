@@ -19,3 +19,4 @@ void LoadBP::LoadClass(const std::string& Path, TSubclassOf<T>& SubClass)
 }
 
 template void LoadBP::LoadClass<AActor>(const std::string&, TSubclassOf<AActor>&);
+template void LoadBP::LoadClass<APawn>(const std::string&, TSubclassOf<APawn>&);
