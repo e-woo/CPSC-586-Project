@@ -2,15 +2,12 @@
 #include <Engine.h>
 #include "Util/LoadBP.h"
 
-TSubclassOf<APawn> SwarmEnemyClass;
 TMap<FString, TArray<TWeakObjectPtr<ACharacter>>> ASwarmAIController::SwarmMap;
 
 ASwarmAIController::ASwarmAIController()
 {
 	// Set this controller to call Tick() every frame
 	PrimaryActorTick.bCanEverTick = true;
-
-	LoadBP::LoadClass("/Game/ThirdPersonBP/Blueprints/SwarmAI/BP_SwarmEnemy.BP_SwarmEnemy", SwarmEnemyClass);
 }
 
 void ASwarmAIController::BeginPlay()
