@@ -114,9 +114,7 @@ void ASwarmAIController::MoveSwarms()
 
 				if (Distance < SeparationDistance && Distance > 1.f)
 				{
-					// Linear falloff (stronger when closer)
-					float Strength = 1.f - (Distance / SeparationDistance);
-					Separation += ToSelf.GetSafeNormal() * 1;
+					Separation += ToSelf.GetSafeNormal();
 				}
 			}
 
