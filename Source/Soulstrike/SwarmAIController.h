@@ -33,8 +33,15 @@ public:
 
 private:
 	void MoveSwarms();
-	
+	void ProcessSwarmAttacks();
+	void OnAttackWindupComplete(ACharacter* Attacker, ACharacter* Target);
 	static TMap<FString, TArray<TWeakObjectPtr<ACharacter>>> SwarmMap;
+
+	// Tracks which enemies currently have a windup running
+	TMap<TWeakObjectPtr<ACharacter>, bool> WindingUpMap;
+
+	// Tracks each enemy’s active windup timer
+	TMap<TWeakObjectPtr<ACharacter>, FTimerHandle> ActiveWindupTimerMap;
 
 	const float SeparationDistance = 600.f;
 	const float CohesionWeight = 0.8f;
@@ -43,4 +50,14 @@ private:
 	const float TargetWeight = 0.5f;
 
 	const float TargetEngageDistance = 2000.f;
+
+
+	float AttackDamage = 0.5f;
+	float MaxAttackRange = 200.0f;
+	float AttackWindupDuration = 1.0f;
+	float AttackCooldown = 5.0f;
+	struct FAttackStartParams
+	{
+		float WindupDuration;
+	};
 };
