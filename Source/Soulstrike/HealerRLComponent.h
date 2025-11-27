@@ -14,4 +14,5 @@ class SOULSTRIKE_API UHealerRLComponent : public URLComponent
 
 protected:
 	virtual float CalculateReward() override;
+	virtual void PerformSecondaryAttackOnElite() override;
 };

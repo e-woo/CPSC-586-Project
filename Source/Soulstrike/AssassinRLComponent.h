@@ -14,4 +14,6 @@ class SOULSTRIKE_API UAssassinRLComponent : public URLComponent
 
 protected:
 	virtual float CalculateReward() override;
+	virtual void UpdatePoisons(float DeltaTime) override;
+	virtual void OnAttackWindupComplete() override;
 };

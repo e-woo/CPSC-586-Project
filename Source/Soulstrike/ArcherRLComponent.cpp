@@ -7,27 +7,29 @@ float UArcherRLComponent::CalculateReward()
 
 	float Reward = 0.0f;
 
-	// === DISTANCE DELTA (Conditional Scaling) ===
-	float DeltaDistance = CurrentState.DistanceToPlayer - PreviousDistanceToPlayer;
+	// Calculate distance delta (using actual distance)
+	float PrevActualDistance = PreviousDistanceToPlayer * MaxAttackRange;
+	float DeltaDistance = ActualDistanceToPlayer - PrevActualDistance;
 
+	// === DISTANCE MANAGEMENT (Conditional Scaling) ===
 	if (CurrentState.bIsBeyondMaxRange)
 	{
 		// OUT OF RANGE: Force engagement by heavily rewarding approach
 		if (DeltaDistance < 0.0f) {  // Moving closer
-			Reward += -DeltaDistance * 50.0f;// High reward
+			Reward += -DeltaDistance * 0.05f;  // 50.0 per 1000 units
 		} else if (DeltaDistance > 0.0f) {  // Moving away
-			Reward -= DeltaDistance * 50.0f;  // High penalty
+			Reward -= DeltaDistance * 0.05f;
 		} else {  // No change
-			Reward -= 5.0f;  // Penalty for not approaching
+			Reward -= 5.0f;
 		}
 	}
 	else
 	{
 		// IN RANGE: Archer wants to maintain/increase distance (kite)
 		if (DeltaDistance > 0.0f) {  // Moving away = good
-			Reward += DeltaDistance * 20.0f;
+			Reward += DeltaDistance * 0.02f;  // 20.0 per 1000 units
 		} else if (DeltaDistance < 0.0f) {  // Getting closer = bad
-			Reward += DeltaDistance * 15.0f;  // Will be negative
+			Reward += DeltaDistance * 0.015f;  // Will be negative (15.0 penalty per 1000 units)
 		}
 	}
 
@@ -41,7 +43,7 @@ float UArcherRLComponent::CalculateReward()
 	// Bonus for increasing DPS
 	Reward += DeltaDPS * 5.0f;
 
-	// === HEALTH DELTA ===
+	// === HEALTH MANAGEMENT ===
 	float DeltaHealth = CurrentState.SelfHealthPercentage - PreviousState.SelfHealthPercentage;
 	Reward += DeltaHealth * 10.0f;
 
