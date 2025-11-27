@@ -49,10 +49,10 @@ private:
 	const float SeparationWeight = 0.7f;
 	const float TargetWeight = 0.5f;
 
-	const float TargetEngageDistance = 2000.f;
+	const float TargetEngageDistance = 2500.f;
 
 
-	float AttackDamage = 0.5f;
+	float AttackDamage = 5.0f;
 	float MaxAttackRange = 200.0f;
 	float AttackWindupDuration = 1.0f;
 	float AttackCooldown = 5.0f;
