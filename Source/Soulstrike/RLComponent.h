@@ -7,6 +7,8 @@
 // Forward declarations
 class AEliteEnemy;
 class ACharacter;
+class FQLearningBrain;
+enum class EEliteType : uint8;
 
 /** Poison damage-over-time effect (for Assassin) */
 USTRUCT()
@@ -190,6 +192,9 @@ protected:
 	/** Last reward received */
 	float LastReward;
 
+	/** Actual distance to player (non-normalized, for reward calculations) */
+	float ActualDistanceToPlayer;
+
 	/** Player location (updated by Director AI) */
 	FVector CachedPlayerLocation;
 
@@ -203,6 +208,12 @@ protected:
 	/** Reference to C++ Elite behavior object (for attack logic) */
 	UPROPERTY()
 	AEliteEnemy* EliteBehavior;
+
+	/** Elite type for weight persistence */
+	EEliteType EliteType;
+
+	/** Q-Learning brain (handles all Q-value calculations) */
+	TSharedPtr<FQLearningBrain> Brain;
 
 public:
 	// ========== ELITE STATS (accessible from AI controller) ==========
@@ -224,11 +235,6 @@ public:
 	float AttackCooldown;
 
 protected:
-	// ========== Q-LEARNING WEIGHTS ==========
-
-	/** Weights for Q-value calculation: Action -> (FeatureName -> Weight) */
-	TMap<EEliteAction, TMap<FName, float>> Weights;
-
 	// ========== INTERNAL STATE TRACKING ==========
 
 	/** Time since last primary attack */
@@ -240,10 +246,10 @@ protected:
 	/** Health at previous tick (to detect damage) */
 	float PreviousHealth;
 
-	/** Damage dealt history (last second) - for DPS calculation */
+	/** Damage dealt history (last 5 seconds) - for DPS calculation */
 	TArray<TPair<float, float>> DamageHistory; // (Time, Damage)
 
-	/** Healing done history (last second) - for healer DPS calculation */
+	/** Healing done history (last 5 seconds) - for healer HPS calculation */
 	TArray<TPair<float, float>> HealingHistory; // (Time, HealAmount)
 
 	/** Current action persistence counter */
@@ -272,6 +278,9 @@ protected:
 	/** Previous DPS for delta calculation */
 	float PreviousDPS;
 
+	/** Previous HPS for delta calculation */
+	float PreviousHPS;
+
 	/** Previous distance to player for delta calculation */
 	float PreviousDistanceToPlayer;
 
@@ -280,8 +289,11 @@ protected:
 	/** Active poison effects (for Assassin elite type) */
 	TArray<FPoisonEffect> ActivePoisons;
 
-	/** Update poison ticks (called every frame for Assassin) */
-	void UpdatePoisons(float DeltaTime);
+	/** Update poison ticks (called every frame for Assassin) - VIRTUAL for override */
+	virtual void UpdatePoisons(float DeltaTime);
+
+	/** Check if poison is active on player (for Assassin reward logic) */
+	bool HasActivePoisonOnPlayer() const;
 
 public:
 	/** Record damage dealt to player */
@@ -290,10 +302,10 @@ public:
 	/** Record healing done to ally */
 	void RecordHealingDone(float HealAmount);
 
-	/** Get average DPS over the last second */
+	/** Get average DPS over the last 5 seconds */
 	float GetAverageDPS() const;
 
-	/** Get average healing per second over the last second */
+	/** Get average healing per second over the last 5 seconds */
 	float GetAverageHPS() const;
 
 	/** Check if can perform attack (not on cooldown or attacking) */
@@ -318,26 +330,11 @@ protected:
 	/** Build the current state from world data */
 	FRLState BuildState();
 
-	/** Calculate Q-value for a given state-action pair */
-	float CalculateQValue(const FRLState& State, EEliteAction Action);
-
-	/** Select an action using epsilon-greedy policy */
-	EEliteAction SelectAction(const FRLState& State);
-
 	/** Execute the chosen action in the world */
 	void ExecuteAction(EEliteAction Action, float DeltaTime);
 
 	/** Calculate the reward for the current state (VIRTUAL - override in subclasses) */
 	virtual float CalculateReward();
-
-	/** Update Q-learning weights based on the transition */
-	void UpdateWeights(const FRLState& OldState, EEliteAction Action, float Reward, const FRLState& NewState);
-
-	/** Initialize weights for all actions and features */
-	virtual void InitializeWeights();
-
-	/** Get all feature values from a state as a TMap */
-	TMap<FName, float> ExtractFeatures(const FRLState& State);
 
 	// ========== HELPER METHODS ==========
 
@@ -362,8 +359,8 @@ protected:
 
 	/** Call attack on the C++ Elite behavior object */
 	void PerformPrimaryAttackOnElite();
-	void PerformSecondaryAttackOnElite();
+	virtual void PerformSecondaryAttackOnElite();
 
-	/** Called when attack windup completes - applies damage if player still in range */
-	void OnAttackWindupComplete();
+	/** Called when attack windup completes - applies damage if player still in range - VIRTUAL for override */
+	virtual void OnAttackWindupComplete();
 };
