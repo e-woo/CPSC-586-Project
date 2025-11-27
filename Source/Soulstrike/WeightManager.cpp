@@ -38,6 +38,15 @@ void UWeightManager::SaveWeights(EEliteType Type, const TMap<EEliteAction, TMap<
 
 void UWeightManager::ResetAllWeights()
 {
+	int32 NumTypesReset = StoredWeights.Num();
 	StoredWeights.Empty();
-	UE_LOG(LogTemp, Warning, TEXT("WeightManager: All weights reset!"));
+	
+	if (NumTypesReset > 0)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("WeightManager: All Elite AI weights reset! Cleared learned knowledge from %d elite type(s). Elites will start fresh."), NumTypesReset);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Log, TEXT("WeightManager: Weight reset called (no learned weights to clear)."));
+	}
 }

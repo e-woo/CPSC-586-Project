@@ -1,5 +1,6 @@
 #include "SoulstrikeGameMode.h"
 #include "EnemyLogicManager.h"
+#include "WeightManager.h"
 
 ASoulstrikeGameMode::ASoulstrikeGameMode()
 {
@@ -9,6 +10,14 @@ ASoulstrikeGameMode::ASoulstrikeGameMode()
 void ASoulstrikeGameMode::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// Reset Elite AI weights for new game (elites must learn from scratch)
+	UWeightManager* WeightMgr = UWeightManager::Get(GetWorld());
+	if (WeightMgr)
+	{
+		WeightMgr->ResetAllWeights();
+		UE_LOG(LogTemp, Log, TEXT("SoulstrikeGameMode: Elite AI weights reset for new game. Elites will learn from scratch."));
+	}
 
 	// Spawn Enemy Logic Manager
 	FActorSpawnParameters SpawnParams;
