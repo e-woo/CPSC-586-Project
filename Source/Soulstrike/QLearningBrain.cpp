@@ -1,4 +1,6 @@
 #include "QLearningBrain.h"
+#include "GameFramework/Character.h"
+#include "GameFramework/CharacterMovementComponent.h"
 
 FQLearningBrain::FQLearningBrain()
 {
@@ -6,6 +8,40 @@ FQLearningBrain::FQLearningBrain()
 
 FQLearningBrain::~FQLearningBrain()
 {
+}
+
+FEliteStats FQLearningBrain::ReadStatsFromBlueprint(ACharacter* Character)
+{
+	FEliteStats Stats;
+	
+	if (!Character)
+		return Stats;
+
+	UClass* CharacterClass = Character->GetClass();
+	if (!CharacterClass)
+		return Stats;
+
+	// Helper lambda to read float property
+	auto ReadFloatProperty = [CharacterClass](ACharacter* Char, const FName& PropertyName, float DefaultValue) -> float {
+		FProperty* Property = CharacterClass->FindPropertyByName(PropertyName);
+		if (Property)
+		{
+			float* ValuePtr = Property->ContainerPtrToValuePtr<float>(Char);
+			if (ValuePtr)
+				return *ValuePtr;
+		}
+		return DefaultValue;
+	};
+
+	// Read all stats
+	Stats.AttackDamage = ReadFloatProperty(Character, TEXT("AttackDamage"), 10.0f);
+	Stats.MaxAttackRange = ReadFloatProperty(Character, TEXT("MaxAttackRange"), 500.0f);
+	Stats.AttackWindupDuration = ReadFloatProperty(Character, TEXT("AttackWindupDuration"), 0.3f);
+	Stats.AttackCooldown = ReadFloatProperty(Character, TEXT("AttackCooldown"), 0.5f);
+	Stats.MovementSpeed = ReadFloatProperty(Character, TEXT("MovementSpeed"), 400.0f);
+	Stats.HealAmount = ReadFloatProperty(Character, TEXT("HealAmount"), 50.0f);
+
+	return Stats;
 }
 
 void FQLearningBrain::InitializeWeights()

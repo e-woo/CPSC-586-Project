@@ -258,6 +258,17 @@ protected:
 	/** Last selected action before persistence check */
 	EEliteAction PendingAction;
 
+	// ========== STATS POLLING ==========
+	
+	/** Timer for periodic stat polling (separate from other timers) */
+	float StatsPollTimer;
+	
+	/** How often to poll Blueprint stats for changes (in seconds) */
+	float StatsPollInterval;
+	
+	/** Update stats from Blueprint (called periodically) */
+	void PollAndUpdateStats();
+
 	// ========== ATTACK STATE MACHINE ==========
 
 	/** Current attack state */

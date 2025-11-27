@@ -57,6 +57,10 @@ URLComponent::URLComponent()
 	PreviousHPS = 0.0f;
 	PreviousDistanceToPlayer = 0.0f;
 	ActualDistanceToPlayer = 0.0f;
+
+	// Stats polling (separate timer)
+	StatsPollTimer = 0.0f;
+	StatsPollInterval = 1.0f; // Poll every 1 second
 }
 
 void URLComponent::BeginPlay()
@@ -103,36 +107,19 @@ void URLComponent::Initialize(APawn* InPawn)
 	if (!OwnerCharacter)
 		return;
 
+	// Read initial health for damage detection
 	UClass* CharacterClass = OwnerCharacter->GetClass();
-
-	// Helper lambda to read float property from Blueprint
 	auto ReadFloatProperty = [CharacterClass](ACharacter* Character, const FName& PropertyName, float DefaultValue) -> float {
 		FProperty* Property = CharacterClass->FindPropertyByName(PropertyName);
 		if (Property)
 		{
 			float* ValuePtr = Property->ContainerPtrToValuePtr<float>(Character);
 			if (ValuePtr)
-			{
 				return *ValuePtr;
-			}
 		}
 		return DefaultValue;
 	};
-
-	// Read all stats from Blueprint
 	PreviousHealth = ReadFloatProperty(OwnerCharacter, TEXT("CurrentHealth"), 100.0f);
-	AttackDamage = ReadFloatProperty(OwnerCharacter, TEXT("AttackDamage"), 10.0f);
-	MaxAttackRange = ReadFloatProperty(OwnerCharacter, TEXT("MaxAttackRange"), 500.0f);
-	AttackWindupDuration = ReadFloatProperty(OwnerCharacter, TEXT("AttackWindupDuration"), 0.3f);
-	AttackCooldown = ReadFloatProperty(OwnerCharacter, TEXT("AttackCooldown"), 0.5f);
-	float MovementSpeed = ReadFloatProperty(OwnerCharacter, TEXT("MovementSpeed"), 400.0f);
-
-	// Apply movement speed to CharacterMovementComponent
-	UCharacterMovementComponent* MovementComp = OwnerCharacter->GetCharacterMovement();
-	if (MovementComp)
-	{
-		MovementComp->MaxWalkSpeed = MovementSpeed;
-	}
 
 	// Detect elite type by name for behavior logic (poison, healing, etc.)
 	FString PawnName = InPawn->GetName();
@@ -175,6 +162,9 @@ void URLComponent::Initialize(APawn* InPawn)
 		EliteBehavior = Cast<AEliteEnemy>(EliteClass->GetDefaultObject());
 	}
 
+	// Read initial stats
+	PollAndUpdateStats();
+
 	// Initialize Q-Learning Brain
 	Brain = MakeShared<FQLearningBrain>();
 	
@@ -192,8 +182,30 @@ void URLComponent::Initialize(APawn* InPawn)
 		UE_LOG(LogTemp, Log, TEXT("RLComponent: %s initialized with fresh weights (first soul)"), *OwnerCharacter->GetName());
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("RLComponent: Initialized %s (HP: %.0f, Damage: %.0f, Range: %.0f, Speed: %.0f, Windup: %.2fs, Cooldown: %.2fs)"), 
-		*OwnerCharacter->GetName(), PreviousHealth, AttackDamage, MaxAttackRange, MovementSpeed, AttackWindupDuration, AttackCooldown);
+	UE_LOG(LogTemp, Log, TEXT("RLComponent: Initialized %s (HP: %.0f, Damage: %.0f, Range: %.0f, Windup: %.2fs, Cooldown: %.2fs)"), 
+		*OwnerCharacter->GetName(), PreviousHealth, AttackDamage, MaxAttackRange, AttackWindupDuration, AttackCooldown);
+}
+
+void URLComponent::PollAndUpdateStats()
+{
+	if (!OwnerCharacter)
+		return;
+
+	// Read all stats from Blueprint using QLearningBrain helper
+	FEliteStats NewStats = FQLearningBrain::ReadStatsFromBlueprint(OwnerCharacter);
+
+	// Apply movement speed if changed
+	UCharacterMovementComponent* MovementComp = OwnerCharacter->GetCharacterMovement();
+	if (MovementComp && FMath::Abs(MovementComp->MaxWalkSpeed - NewStats.MovementSpeed) > 1.0f)
+	{
+		MovementComp->MaxWalkSpeed = NewStats.MovementSpeed;
+	}
+
+	// Update cached stats
+	AttackDamage = NewStats.AttackDamage;
+	MaxAttackRange = NewStats.MaxAttackRange;
+	AttackWindupDuration = NewStats.AttackWindupDuration;
+	AttackCooldown = NewStats.AttackCooldown;
 }
 
 void URLComponent::ExecuteRLStep(float DeltaTime)
@@ -205,6 +217,14 @@ void URLComponent::ExecuteRLStep(float DeltaTime)
 	if (PlayerCharacter)
 	{
 		CachedPlayerLocation = PlayerCharacter->GetActorLocation();
+	}
+
+	// === STATS POLLING (separate timer) ===
+	StatsPollTimer += DeltaTime;
+	if (StatsPollTimer >= StatsPollInterval)
+	{
+		PollAndUpdateStats();
+		StatsPollTimer = 0.0f;
 	}
 
 	// Clean up old damage/healing history

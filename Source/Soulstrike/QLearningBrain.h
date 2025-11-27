@@ -4,6 +4,28 @@
 #include "RLComponent.h"
 
 /**
+ * Elite Stats Structure - holds all combat and movement stats
+ */
+struct FEliteStats
+{
+	float AttackDamage;
+	float MaxAttackRange;
+	float AttackWindupDuration;
+	float AttackCooldown;
+	float MovementSpeed;
+	float HealAmount; // For Healer only
+	
+	FEliteStats()
+		: AttackDamage(10.0f)
+		, MaxAttackRange(500.0f)
+		, AttackWindupDuration(0.3f)
+		, AttackCooldown(0.5f)
+		, MovementSpeed(400.0f)
+		, HealAmount(50.0f)
+	{}
+};
+
+/**
  * Q-Learning Brain - Handles all Q-value calculations, action selection, and weight updates
  * Extracted from RLComponent to reduce file size and improve maintainability
  */
@@ -23,6 +45,11 @@ public:
 
 	/** Get current weights for saving */
 	const TMap<EEliteAction, TMap<FName, float>>& GetWeights() const { return Weights; }
+
+	// ========== STATS POLLING ==========
+	
+	/** Read all elite stats from Blueprint properties */
+	static FEliteStats ReadStatsFromBlueprint(class ACharacter* Character);
 
 	// ========== Q-LEARNING CORE ==========
 
