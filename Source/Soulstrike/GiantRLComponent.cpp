@@ -7,16 +7,18 @@ float UGiantRLComponent::CalculateReward()
 
 	float Reward = 0.0f;
 
-	// === DISTANCE DELTA ===
-	float DeltaDistance = CurrentState.DistanceToPlayer - PreviousDistanceToPlayer;
+	// Calculate distance delta (using actual distance)
+	float PrevActualDistance = PreviousDistanceToPlayer * MaxAttackRange;
+	float DeltaDistance = ActualDistanceToPlayer - PrevActualDistance;
 
+	// === DISTANCE MANAGEMENT ===
 	if (CurrentState.bIsBeyondMaxRange)
 	{
 		// OUT OF RANGE: Force engagement
 		if (DeltaDistance < 0.0f) {
-			Reward += -DeltaDistance * 50.0f;
+			Reward += -DeltaDistance * 0.05f;  // 50.0 per 1000 units
 		} else if (DeltaDistance > 0.0f) {
-			Reward -= DeltaDistance * 50.0f;
+			Reward -= DeltaDistance * 0.05f;
 		} else {
 			Reward -= 5.0f;
 		}
@@ -25,9 +27,9 @@ float UGiantRLComponent::CalculateReward()
 	{
 		// IN RANGE: Giant wants to stay close (tank)
 		if (DeltaDistance < 0.0f) {  // Moving closer = good
-			Reward += -DeltaDistance * 15.0f;
+			Reward += -DeltaDistance * 0.015f;  // 15.0 per 1000 units
 		} else if (DeltaDistance > 0.0f) {  // Retreating = bad
-			Reward -= DeltaDistance * 10.0f;
+			Reward -= DeltaDistance * 0.01f;  // 10.0 penalty per 1000 units
 		}
 	}
 
@@ -38,20 +40,20 @@ float UGiantRLComponent::CalculateReward()
 	Reward += CurrentDPS * 2.0f;  // Base DPS
 	Reward += DeltaDPS * 5.0f;    // Delta bonus
 
-	// === HEALTH DELTA (High priority for tanks) ===
+	// === HEALTH MANAGEMENT (High priority for tanks) ===
 	float DeltaHealth = CurrentState.SelfHealthPercentage - PreviousState.SelfHealthPercentage;
-	Reward += DeltaHealth * 15.0f;  // Higher multiplier for tank survival
+	Reward += DeltaHealth * 15.0f;  // Higher multiplier than other classes - survival is key
 
-	// === STATIC BONUSES ===
-	// Survival (small static bonus)
+	// === TANKING BONUSES ===
+	// Survival bonus (small static)
 	Reward += CurrentState.SelfHealthPercentage * 1.0f;
 
-	// Frontline position
+	// Frontline position (very close to player)
 	if (CurrentState.DistanceToPlayer < 0.3f) {
 		Reward += 3.0f;
 	}
 
-	// Taking damage (tanking for team)
+	// Taking damage (tanking for team - drawing aggro)
 	if (CurrentState.bTookDamageRecently) {
 		Reward += 2.0f;
 	}

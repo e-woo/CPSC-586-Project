@@ -8,16 +8,18 @@ float UPaladinRLComponent::CalculateReward()
 
 	float Reward = 0.0f;
 
-	// === DISTANCE DELTA ===
-	float DeltaDistance = CurrentState.DistanceToPlayer - PreviousDistanceToPlayer;
+	// Calculate distance delta (using actual distance)
+	float PrevActualDistance = PreviousDistanceToPlayer * MaxAttackRange;
+	float DeltaDistance = ActualDistanceToPlayer - PrevActualDistance;
 
+	// === DISTANCE MANAGEMENT ===
 	if (CurrentState.bIsBeyondMaxRange)
 	{
 		// OUT OF RANGE: Force engagement
 		if (DeltaDistance < 0.0f) {
-			Reward += -DeltaDistance * 50.0f;
+			Reward += -DeltaDistance * 0.05f;  // 50.0 per 1000 units
 		} else if (DeltaDistance > 0.0f) {
-			Reward -= DeltaDistance * 50.0f;
+			Reward -= DeltaDistance * 0.05f;
 		} else {
 			Reward -= 5.0f;
 		}
@@ -26,7 +28,7 @@ float UPaladinRLComponent::CalculateReward()
 	{
 		// IN RANGE: Paladin wants to move closer (frontline)
 		if (DeltaDistance < 0.0f) {  // Moving closer = good
-			Reward += -DeltaDistance * 10.0f;
+			Reward += -DeltaDistance * 0.01f;  // 10.0 per 1000 units
 		}
 	}
 
@@ -34,14 +36,14 @@ float UPaladinRLComponent::CalculateReward()
 	float CurrentDPS = GetAverageDPS();
 	float DeltaDPS = CurrentDPS - PreviousDPS;
 
-	Reward += CurrentDPS * 1.5f;  // Base DPS reward
+	Reward += CurrentDPS * 1.5f;  // Moderate DPS multiplier
 	Reward += DeltaDPS * 5.0f;    // Delta bonus
 
-	// === HEALTH DELTA ===
+	// === HEALTH MANAGEMENT ===
 	float DeltaHealth = CurrentState.SelfHealthPercentage - PreviousState.SelfHealthPercentage;
 	Reward += DeltaHealth * 10.0f;
 
-	// === HEALER PROTECTION (Static) ===
+	// === HEALER PROTECTION (Dominant Feature) ===
 	TArray<ACharacter*> ClosestAllies;
 	FindClosestAllies(ClosestAllies, 3);
 
@@ -50,7 +52,8 @@ float UPaladinRLComponent::CalculateReward()
 	
 	for (ACharacter* Ally : ClosestAllies)
 	{
-		if (Ally && Ally->GetName().Contains("Healer"))
+		if (Ally && Ally->IsValidLowLevel() && !Ally->IsPendingKillOrUnreachable() && 
+			Ally->GetName().Contains("Healer"))
 		{
 			Healer = Ally;
 			DistanceToHealer = FVector::Dist(OwnerCharacter->GetActorLocation(), Ally->GetActorLocation());
@@ -58,11 +61,11 @@ float UPaladinRLComponent::CalculateReward()
 		}
 	}
 
-	if (Healer)
+	if (Healer && Healer->IsValidLowLevel())
 	{
-		// Reward for being between player and healer
+		// Reward for being between player and healer (bodyguard position)
 		float DistPlayerToHealer = FVector::Dist(CachedPlayerLocation, Healer->GetActorLocation());
-		float DistSelfToPlayer = FVector::Dist(OwnerCharacter->GetActorLocation(), CachedPlayerLocation);
+		float DistSelfToPlayer = ActualDistanceToPlayer;
 
 		if (DistanceToHealer < DistPlayerToHealer && DistSelfToPlayer < DistPlayerToHealer) {
 			Reward += 10.0f;  // Excellent bodyguard position
@@ -71,7 +74,7 @@ float UPaladinRLComponent::CalculateReward()
 		}
 	}
 
-	// === SMALL STATIC BONUSES ===
+	// === FRONTLINE BONUSES ===
 	// Team cohesion
 	Reward += CurrentState.NumNearbyAllies * 1.0f;
 
