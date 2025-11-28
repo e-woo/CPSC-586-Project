@@ -69,7 +69,7 @@ void ADirector::TickDirector()
 	int BaseChance = 50 + PlayerCharacter->Level;
 
 	// Attempt to spawn enemies every 10 seconds
-	if (TickNum >= 10)
+	if (TickNum >= 4)
 	{
 		if (FMath::RandRange(1, 100) <= BaseChance + SpawnChanceBonus)
 		{
@@ -115,12 +115,16 @@ void ADirector::ReceiveSpawnCredits()
 
 void ADirector::SpawnSwarmEnemies()
 {
+	int MinEnemyCount =
+		(PlayerCharacter->Level < 5) ? 3 :
+		(PlayerCharacter->Level < 10) ? 6 :
+		9;
 	int MaxEnemyCount =
 		(PlayerCharacter->Level < 5) ? 5 :
 		(PlayerCharacter->Level < 10) ? 10 :
 		15;
 
-	int EnemiesToSpawn = FMath::RandRange(3, MaxEnemyCount);
+	int EnemiesToSpawn = FMath::RandRange(MinEnemyCount, MaxEnemyCount);
 	EnemiesToSpawn = FMath::Min(EnemiesToSpawn, SpawnCredits / EnemySpawnCost);
 
 	UE_LOG(LogTemp, Display, TEXT("Spawning %d enemies."), EnemiesToSpawn);
@@ -135,7 +139,7 @@ void ADirector::SpawnSwarmEnemies()
 	{
 		FActorSpawnParameters SpawnParams;
 
-		AActor* NewEnemy = Spawn::SpawnActor(World, EnemyActorClass, SpawnLocation, FVector(500.f, 500.f, 10000.f), 0, 60.f, false, SpawnParams, FVector(0, 0, 100));
+		AActor* NewEnemy = Spawn::SpawnActor(World, EnemyActorClass, SpawnLocation, FVector(750.f, 750.f, 10000.f), 0, 60.f, false, SpawnParams, FVector(0, 0, 100));
 		if (NewEnemy)
 		{
 			NewEnemy->SetFolderPath(Path);

@@ -53,8 +53,8 @@ private:
 
 
 	float AttackDamage = 5.0f;
-	float MaxAttackRange = 200.0f;
-	float AttackWindupDuration = 1.0f;
+	float MaxAttackRange = 300.0f;
+	float AttackWindupDuration = 0.5f;
 	float AttackCooldown = 5.0f;
 	struct FAttackStartParams
 	{
