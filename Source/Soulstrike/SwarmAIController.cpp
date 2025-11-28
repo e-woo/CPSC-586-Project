@@ -101,6 +101,8 @@ void ASwarmAIController::MoveSwarms()
 		for (auto& Target : Neighbors)
 		{
 			if (!Target.IsValid()) continue;
+			if (WindingUpMap.Contains(Target) && WindingUpMap[Target])
+				continue;
 
 			FVector TargetLoc = Target->GetActorLocation();
 
