@@ -17,6 +17,8 @@ public:
 	// Sets default values for this controller's properties
 	ASwarmAIController();
 
+	void RegisterSwarmEnemy(APawn* InPawn, const FGuid& InSwarmId);
+
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
@@ -32,16 +34,21 @@ public:
 	virtual void OnUnPossess() override;
 
 private:
-	void MoveSwarms();
+	UPROPERTY()
+	TSubclassOf<AActor> EnemyActorClass;
+
+	FGuid SwarmId;
+
+	void MoveSwarms(float DeltaTime);
 	void ProcessSwarmAttacks();
 	void OnAttackWindupComplete(ACharacter* Attacker, ACharacter* Target);
-	static TMap<FString, TArray<TWeakObjectPtr<ACharacter>>> SwarmMap;
+	static TMap<FGuid, TArray<TWeakObjectPtr<ACharacter>>> SwarmMap;
 
 	// Tracks which enemies currently have a windup running
-	TMap<TWeakObjectPtr<ACharacter>, bool> WindingUpMap;
+	static TMap<TWeakObjectPtr<ACharacter>, bool> WindingUpMap;
 
 	// Tracks each enemy’s active windup timer
-	TMap<TWeakObjectPtr<ACharacter>, FTimerHandle> ActiveWindupTimerMap;
+	static TMap<TWeakObjectPtr<ACharacter>, FTimerHandle> ActiveWindupTimerMap;
 
 	const float SeparationDistance = 600.f;
 	const float CohesionWeight = 0.8f;
