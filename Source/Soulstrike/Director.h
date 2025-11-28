@@ -79,7 +79,7 @@ private:
 	int32 SpawnEliteChanceBonus = 0;
 
 	int32 SpawnCredits = 50;
-	int32 BaseCreditAmountToReceive = 10;
+	int32 BaseCreditAmountToReceive = 15;
 
 	int32 SwarmPackNum = 0;
 
