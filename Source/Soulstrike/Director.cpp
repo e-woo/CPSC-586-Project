@@ -8,6 +8,7 @@
 #include "EliteEnemy.h"
 #include "Util/Spawn.h"
 #include "Util/LoadBP.h"
+#include "SwarmAIController.h"
 
 
 // Sets default values
@@ -135,14 +136,23 @@ void ADirector::SpawnSwarmEnemies()
 
 	UWorld* World = GetWorld();
 	FName Path = FName("Enemies/SwarmEnemies/Pack_" + FString::FromInt(SwarmPackNum++));
+
+	FGuid SwarmId = FGuid::NewGuid();
+
 	for (int i = 0; i < EnemiesToSpawn; i++)
 	{
 		FActorSpawnParameters SpawnParams;
 
-		AActor* NewEnemy = Spawn::SpawnActor(World, EnemyActorClass, SpawnLocation, FVector(750.f, 750.f, 10000.f), 0, 60.f, false, SpawnParams, FVector(0, 0, 100));
-		if (NewEnemy)
+		AActor* NewEnemy = Spawn::SpawnActor(World, EnemyActorClass, SpawnLocation, FVector(750.f, 750.f, 10000.f), 0, 60.f, false, SpawnParams, FVector(0, 0, 200));
+		if (!NewEnemy) continue;
+		if (APawn* PawnEnemy = Cast<APawn>(NewEnemy))
 		{
-			NewEnemy->SetFolderPath(Path);
+#if WITH_EDITOR
+			PawnEnemy->SetFolderPath(Path);
+#endif
+			ASwarmAIController* Controller = Cast<ASwarmAIController>(PawnEnemy->GetController());
+			if (Controller)
+				Controller->RegisterSwarmEnemy(PawnEnemy, SwarmId);
 		}
 	}
 	SpawnCredits -= EnemiesToSpawn * EnemySpawnCost;
@@ -174,7 +184,9 @@ void ADirector::SpawnEliteEnemies()
 	AActor* NewElite = Spawn::SpawnActor(World, SelectedEliteClass, SpawnLocation, FVector(500.f, 500.f, 10000.f), 0, 60.f, false, SpawnParams, FVector(0, 0, 100));
 	if (NewElite)
 	{
+#if WITH_EDITOR
 		NewElite->SetFolderPath("Enemies/EliteEnemies");
+#endif
 	}
 	SpawnCredits -= EliteSpawnCost;
 }

@@ -3,7 +3,9 @@
 #include "Util/LoadBP.h"
 #include "EnemyLogicManager.h"
 
-TMap<FString, TArray<TWeakObjectPtr<ACharacter>>> ASwarmAIController::SwarmMap;
+TMap<FGuid, TArray<TWeakObjectPtr<ACharacter>>> ASwarmAIController::SwarmMap;
+TMap<TWeakObjectPtr<ACharacter>, bool> ASwarmAIController::WindingUpMap;
+TMap<TWeakObjectPtr<ACharacter>, FTimerHandle> ASwarmAIController::ActiveWindupTimerMap;
 
 ASwarmAIController::ASwarmAIController()
 {
@@ -13,11 +15,13 @@ ASwarmAIController::ASwarmAIController()
 
 void ASwarmAIController::BeginPlay()
 {
-	FTimerDelegate SwarmTimerDelegate;
-	FTimerHandle SwarmTimerHandle;
+	LoadBP::LoadClass("/Game/ThirdPersonBP/Blueprints/SwarmAI/BP_SwarmEnemy.BP_SwarmEnemy_C", EnemyActorClass);
 
-	SwarmTimerDelegate.BindUObject(this, &ASwarmAIController::MoveSwarms);
-	GetWorldTimerManager().SetTimer(SwarmTimerHandle, SwarmTimerDelegate, 0.01f, true);
+	//FTimerDelegate SwarmTimerDelegate;
+	//FTimerHandle SwarmTimerHandle;
+
+	//SwarmTimerDelegate.BindUObject(this, &ASwarmAIController::MoveSwarms);
+	//GetWorldTimerManager().SetTimer(SwarmTimerHandle, SwarmTimerDelegate, 0.01f, true);
 
 	FTimerDelegate SwarmAttackTimerDelegate;
 	FTimerHandle SwarmAttackTimerHandle;
@@ -29,27 +33,29 @@ void ASwarmAIController::BeginPlay()
 
 void ASwarmAIController::OnPossess(APawn* InPawn)
 {
-	FString Folder = InPawn->GetFolderPath().ToString();
-	FString Last = FPaths::GetCleanFilename(Folder);
-
-	UE_LOG(LogTemp, Warning, TEXT("Possessed Pawn: %s in Swarm Group: %s"), *InPawn->GetName(), *Last);
-	if (!SwarmMap.Contains(Last))
+	Super::OnPossess(InPawn);
+}
+void ASwarmAIController::RegisterSwarmEnemy(APawn* InPawn, const FGuid& InSwarmId)
+{
+	if (!InPawn) return;
+	this->SwarmId = InSwarmId;
+	UE_LOG(LogTemp, Warning, TEXT("Swarm Group: %s"), *InSwarmId.ToString());
+	//UE_LOG(LogTemp, Warning, TEXT("Possessed Pawn: %s in Swarm Group: %s"), *InPawn->GetName(), *Last);
+	if (!SwarmMap.Contains(InSwarmId))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Creating new Swarm Group: %s"), *Last);
-		SwarmMap.Add(Last, TArray<TWeakObjectPtr<ACharacter>>());
+		UE_LOG(LogTemp, Warning, TEXT("Creating new Swarm Group: %s"), *InSwarmId.ToString());
+		SwarmMap.Add(InSwarmId, TArray<TWeakObjectPtr<ACharacter>>());
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Adding to existing Swarm Group: %s"), *Last);
+		UE_LOG(LogTemp, Warning, TEXT("Adding to existing Swarm Group: %s"), *InSwarmId.ToString());
 	}
-	
+
 	ACharacter* PawnChar = Cast<ACharacter>(InPawn);
 	if (PawnChar)
 	{
-		SwarmMap[Last].Add(PawnChar);
+		SwarmMap[InSwarmId].Add(PawnChar);
 	}
-
-	Super::OnPossess(InPawn);
 }
 
 void ASwarmAIController::OnUnPossess()
@@ -60,107 +66,111 @@ void ASwarmAIController::OnUnPossess()
 
 void ASwarmAIController::Tick(float DeltaTime)
 {
+	MoveSwarms(DeltaTime);
 	Super::Tick(DeltaTime);
 }
 
-void ASwarmAIController::MoveSwarms()
+void ASwarmAIController::MoveSwarms(float DeltaTime)
 {
 	UWorld* World = GetWorld();
 	ACharacter* Player = UGameplayStatics::GetPlayerCharacter(World, 0);
 	if (!Player) return;
 
 
-	for (auto& Entry : SwarmMap)
+	if (!SwarmMap.Contains(SwarmId))
 	{
-		// Each entry represents a swarm group
-		TArray<TWeakObjectPtr<ACharacter>>& Neighbors = Entry.Value;
+		return;
+	}
+	// Each entry represents a swarm group
+	TArray<TWeakObjectPtr<ACharacter>>& Neighbors = SwarmMap[SwarmId];
 
-		if (Neighbors.Num() == 0)
-			continue;
+	if (Neighbors.Num() == 0)
+		return;
 
-		// Compute group statistics ---
-		FVector AvgLocation = FVector::ZeroVector;
-		FVector AvgForward = FVector::ZeroVector;
+	// Compute group statistics ---
+	FVector AvgLocation = FVector::ZeroVector;
+	FVector AvgForward = FVector::ZeroVector;
 
-		int32 ValidCount = 0;
-		for (auto& Target : Neighbors)
+	int32 ValidCount = 0;
+	for (auto& Target : Neighbors)
+	{
+		if (!Target.IsValid()) continue;
+		ValidCount++;
+
+		AvgLocation += Target->GetActorLocation();
+		AvgForward += Target->GetActorForwardVector();
+	}
+
+	if (ValidCount == 0)
+		return;
+
+	AvgLocation /= ValidCount;
+	AvgForward = AvgForward.GetSafeNormal();
+
+	TWeakObjectPtr<ACharacter> Target = Cast<ACharacter>(GetPawn());
+	if (!Target.IsValid()) return;
+	if (WindingUpMap.Contains(Target) && WindingUpMap[Target])
+		return;
+
+
+	FVector TargetLoc = Target->GetActorLocation();
+
+	// Cohesion: move toward group's center
+	FVector Cohesion = (AvgLocation - TargetLoc).GetSafeNormal();
+
+	// Alignment: follow group's average forward
+	FVector Alignment = AvgForward;
+
+	// Separation: avoid getting too close to group members
+	FVector Separation = FVector::ZeroVector;
+	for (auto& Neighbor : Neighbors)
+	{
+		if (!Neighbor.IsValid() || Neighbor.Get() == Target.Get()) continue;
+
+		FVector ToSelf = TargetLoc - Neighbor->GetActorLocation();
+		float Distance = ToSelf.Size();
+
+		if (Distance < SeparationDistance && Distance > 1.f)
 		{
-			if (!Target.IsValid()) continue;
-			ValidCount++;
-
-			AvgLocation += Target->GetActorLocation();
-			AvgForward += Target->GetActorForwardVector();
+			Separation += ToSelf.GetSafeNormal();
 		}
+	}
 
-		if (ValidCount == 0)
-			continue;
+	// Target: Move entire swarm toward player if within engage distance
+	FVector ToPlayer = FVector::ZeroVector;
+	float DistanceToPlayer = FVector::Dist(AvgLocation, Player->GetActorLocation());
+	if (DistanceToPlayer <= TargetEngageDistance)
+	{
+		ToPlayer = (Player->GetActorLocation() - TargetLoc).GetSafeNormal();
+	}
 
-		AvgLocation /= ValidCount;
-		AvgForward = AvgForward.GetSafeNormal();
+	// Compute Direction
+	FVector DesiredDir =
+		(Cohesion * CohesionWeight
+			+ Alignment * AlignmentWeight
+			+ Separation * SeparationWeight
+			+ ToPlayer * TargetWeight)
+		.GetSafeNormal();
 
-		for (auto& Target : Neighbors)
-		{
-			if (!Target.IsValid()) continue;
-			if (WindingUpMap.Contains(Target) && WindingUpMap[Target])
-				continue;
+	// Apply movement
+	Target->AddMovementInput(DesiredDir, DeltaTime * 600.f);
+	
+	DrawDebugLine(World, Target->GetActorLocation(), Target->GetActorLocation() + DesiredDir * 1000.f, FColor::Red, false, 0.1f, 0, 2.f);
 
-			FVector TargetLoc = Target->GetActorLocation();
 
-			// Cohesion: move toward group's center
-			FVector Cohesion = (AvgLocation - TargetLoc).GetSafeNormal();
+	// Jump over obstacles
+	FVector Start = Target->GetActorLocation();
+	FVector End = Start + DesiredDir * 200.f;
 
-			// Alignment: follow group's average forward
-			FVector Alignment = AvgForward;
+	FCollisionQueryParams Params;
+	Params.AddIgnoredActor(Target.Get());
 
-			// Separation: avoid getting too close to group members
-			FVector Separation = FVector::ZeroVector;
-			for (auto& Neighbor : Neighbors)
-			{
-				if (!Neighbor.IsValid() || Neighbor.Get() == Target.Get()) continue;
+	FHitResult Hit;
+	bool bBlocked = World->LineTraceSingleByChannel(Hit, Start, End, ECC_WorldStatic, Params);
 
-				FVector ToSelf = TargetLoc - Neighbor->GetActorLocation();
-				float Distance = ToSelf.Size();
-
-				if (Distance < SeparationDistance && Distance > 1.f)
-				{
-					Separation += ToSelf.GetSafeNormal();
-				}
-			}
-
-			// Target: Move entire swarm toward player if within engage distance
-			FVector ToPlayer = FVector::ZeroVector;
-			float DistanceToPlayer = FVector::Dist(AvgLocation, Player->GetActorLocation());
-			if (DistanceToPlayer <= TargetEngageDistance)
-			{
-				ToPlayer = (Player->GetActorLocation() - TargetLoc).GetSafeNormal();
-			}
-
-			// Compute Direction
-			FVector DesiredDir =
-				(Cohesion * CohesionWeight
-					+ Alignment * AlignmentWeight
-					+ Separation * SeparationWeight
-					+ ToPlayer * TargetWeight)
-				.GetSafeNormal();
-
-			// Apply movement
-			Target->AddMovementInput(DesiredDir, 1.0f);
-
-			// Jump over obstacles
-			FVector Start = Target->GetActorLocation();
-			FVector End = Start + DesiredDir * 200.f;
-
-			FCollisionQueryParams Params;
-			Params.AddIgnoredActor(Target.Get());
-
-			FHitResult Hit;
-			bool bBlocked = World->LineTraceSingleByChannel(Hit, Start, End, ECC_WorldStatic, Params);
-
-			if (bBlocked && Target->GetMovementComponent()->IsMovingOnGround())
-			{
-				Target->Jump();
-			}
-		}
+	if (bBlocked && Target->GetMovementComponent()->IsMovingOnGround())
+	{
+		Target->Jump();
 	}
 }
 
