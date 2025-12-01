@@ -30,6 +30,7 @@ URLComponent::URLComponent()
 	MaxAttackRange = 500.0f;
 	AttackWindupDuration = 0.3f;
 	AttackCooldown = 0.5f;
+	MovementSpeed = 400.0f; 
 
 	// Debug
 	bDebugMode = false;
@@ -202,6 +203,7 @@ void URLComponent::PollAndUpdateStats()
 	}
 
 	// Update cached stats
+	MovementSpeed = NewStats.MovementSpeed;
 	AttackDamage = NewStats.AttackDamage;
 	MaxAttackRange = NewStats.MaxAttackRange;
 	AttackWindupDuration = NewStats.AttackWindupDuration;
@@ -422,36 +424,47 @@ void URLComponent::ExecuteAction(EEliteAction Action, float DeltaTime)
 	if (!AIController)
 		return;
 
+	// Ensure movement speed from stats is applied
+	if (UCharacterMovementComponent* MoveComp = OwnerCharacter->GetCharacterMovement())
+	{
+		if (FMath::Abs(MoveComp->MaxWalkSpeed - MovementSpeed) > 1.0f)
+		{
+			MoveComp->MaxWalkSpeed = MovementSpeed;
+		}
+		MoveComp->bOrientRotationToMovement = true;
+	}
+	// Focus player to force AI to face player
+	AIController->SetFocus(PlayerCharacter);
+
 	FVector OwnerLocation = OwnerCharacter->GetActorLocation();
 	FVector PlayerLocation = CachedPlayerLocation;
 	FVector DirectionToPlayer = (PlayerLocation - OwnerLocation).GetSafeNormal();
 	FVector RightVector = FVector::CrossProduct(DirectionToPlayer, FVector::UpVector).GetSafeNormal();
 
-	const float MoveDistance = 200.0f;
+	const float MoveOffset = 600.0f;
 
 	switch (Action)
 	{
 	case EEliteAction::Move_Towards_Player:
 	{
-		FVector TargetLocation = OwnerLocation + DirectionToPlayer * MoveDistance;
-		AIController->MoveToLocation(TargetLocation, 50.0f);
+		AIController->MoveToActor(PlayerCharacter, 75.0f);
 		break;
 	}
 	case EEliteAction::Move_Away_From_Player:
 	{
-		FVector TargetLocation = OwnerLocation - DirectionToPlayer * MoveDistance;
+		FVector TargetLocation = OwnerLocation - DirectionToPlayer * MoveOffset;
 		AIController->MoveToLocation(TargetLocation, 50.0f);
 		break;
 	}
 	case EEliteAction::Strafe_Left:
 	{
-		FVector TargetLocation = OwnerLocation - RightVector * MoveDistance;
+		FVector TargetLocation = OwnerLocation - RightVector * MoveOffset;
 		AIController->MoveToLocation(TargetLocation, 50.0f);
 		break;
 	}
 	case EEliteAction::Strafe_Right:
 	{
-		FVector TargetLocation = OwnerLocation + RightVector * MoveDistance;
+		FVector TargetLocation = OwnerLocation + RightVector * MoveOffset;
 		AIController->MoveToLocation(TargetLocation, 50.0f);
 		break;
 	}
