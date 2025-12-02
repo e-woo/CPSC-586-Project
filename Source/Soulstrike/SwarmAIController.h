@@ -39,9 +39,9 @@ private:
 
 	FGuid SwarmId;
 
-	void MoveSwarms(float DeltaTime);
-	void ProcessSwarmAttacks();
-	void OnAttackWindupComplete(ACharacter* Attacker, ACharacter* Target);
+	void ProcessMovement(float DeltaTime);
+	void ProcessAttack();
+	void OnAttackWindupComplete(ACharacter* Target);
 	static TMap<FGuid, TArray<TWeakObjectPtr<ACharacter>>> SwarmMap;
 
 	// Tracks which enemies currently have a windup running
