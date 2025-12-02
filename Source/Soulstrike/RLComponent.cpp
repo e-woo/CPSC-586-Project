@@ -30,6 +30,7 @@ URLComponent::URLComponent()
 	MaxAttackRange = 500.0f;
 	AttackWindupDuration = 0.3f;
 	AttackCooldown = 0.5f;
+	MovementSpeed = 400.0f; 
 
 	// Debug
 	bDebugMode = false;
@@ -202,6 +203,7 @@ void URLComponent::PollAndUpdateStats()
 	}
 
 	// Update cached stats
+	MovementSpeed = NewStats.MovementSpeed;
 	AttackDamage = NewStats.AttackDamage;
 	MaxAttackRange = NewStats.MaxAttackRange;
 	AttackWindupDuration = NewStats.AttackWindupDuration;
@@ -284,16 +286,21 @@ void URLComponent::ExecuteRLStep(float DeltaTime)
 		Epsilon = FMath::Max(0.01f, Epsilon - (EpsilonDecayRate * DeltaTime));
 	}
 
+	// Capture previous step metrics BEFORE building new state
+	float PrevDistNorm = CurrentState.DistanceToPlayer;
+	float PrevDPSCapture = GetAverageDPS();
+	float PrevHPSCapture = GetAverageHPS();
+
 	// Save previous state
 	PreviousState = CurrentState;
 
 	// Build current state
 	CurrentState = BuildState();
 
-	// Store delta tracking values
-	PreviousDistanceToPlayer = CurrentState.DistanceToPlayer;
-	PreviousDPS = GetAverageDPS();
-	PreviousHPS = GetAverageHPS();
+	// Store delta tracking values using captured previous metrics
+	PreviousDistanceToPlayer = PrevDistNorm;
+	PreviousDPS = PrevDPSCapture;
+	PreviousHPS = PrevHPSCapture;
 
 	// If this is not the first step, update weights
 	if (PreviousState.SelfHealthPercentage > 0.0f)
@@ -422,36 +429,47 @@ void URLComponent::ExecuteAction(EEliteAction Action, float DeltaTime)
 	if (!AIController)
 		return;
 
+	// Ensure movement speed from stats is applied
+	if (UCharacterMovementComponent* MoveComp = OwnerCharacter->GetCharacterMovement())
+	{
+		if (FMath::Abs(MoveComp->MaxWalkSpeed - MovementSpeed) > 1.0f)
+		{
+			MoveComp->MaxWalkSpeed = MovementSpeed;
+		}
+		MoveComp->bOrientRotationToMovement = true;
+	}
+	// Focus player to force AI to face player
+	AIController->SetFocus(PlayerCharacter);
+
 	FVector OwnerLocation = OwnerCharacter->GetActorLocation();
 	FVector PlayerLocation = CachedPlayerLocation;
 	FVector DirectionToPlayer = (PlayerLocation - OwnerLocation).GetSafeNormal();
 	FVector RightVector = FVector::CrossProduct(DirectionToPlayer, FVector::UpVector).GetSafeNormal();
 
-	const float MoveDistance = 200.0f;
+	const float MoveOffset = 600.0f;
 
 	switch (Action)
 	{
 	case EEliteAction::Move_Towards_Player:
 	{
-		FVector TargetLocation = OwnerLocation + DirectionToPlayer * MoveDistance;
-		AIController->MoveToLocation(TargetLocation, 50.0f);
+		AIController->MoveToActor(PlayerCharacter, 75.0f);
 		break;
 	}
 	case EEliteAction::Move_Away_From_Player:
 	{
-		FVector TargetLocation = OwnerLocation - DirectionToPlayer * MoveDistance;
+		FVector TargetLocation = OwnerLocation - DirectionToPlayer * MoveOffset;
 		AIController->MoveToLocation(TargetLocation, 50.0f);
 		break;
 	}
 	case EEliteAction::Strafe_Left:
 	{
-		FVector TargetLocation = OwnerLocation - RightVector * MoveDistance;
+		FVector TargetLocation = OwnerLocation - RightVector * MoveOffset;
 		AIController->MoveToLocation(TargetLocation, 50.0f);
 		break;
 	}
 	case EEliteAction::Strafe_Right:
 	{
-		FVector TargetLocation = OwnerLocation + RightVector * MoveDistance;
+		FVector TargetLocation = OwnerLocation + RightVector * MoveOffset;
 		AIController->MoveToLocation(TargetLocation, 50.0f);
 		break;
 	}
@@ -676,17 +694,20 @@ void URLComponent::DebugDraw()
 	case EAttackState::OnCooldown: StateText += "Cooldown"; break;
 	}
 
+	// Show distance and recent reward
 	FString DebugText = FString::Printf(
-		TEXT("%s\nAction: %d\nReward: %.2f\nDist: %.2f\nHP: %.2f\nDPS: %.1f"),
+		TEXT("%s\nAction: %d\nR: %.2f\nDist: %.2f (%.0f/%0.f)\nHP: %.2f\nDPS: %.1f\nEps: %.2f"),
 		*StateText,
 		static_cast<int32>(LastAction),
 		LastReward,
 		CurrentState.DistanceToPlayer,
+		ActualDistanceToPlayer,
+		MaxAttackRange,
 		CurrentState.SelfHealthPercentage,
-		GetAverageDPS()
+		GetAverageDPS(),
+		Epsilon
 	);
 
-	// Draw with duration to persist between frames
 	DrawDebugString(GetWorld(), DebugLocation, DebugText, nullptr, FColor::Yellow, 0.1f, true);
 }
 

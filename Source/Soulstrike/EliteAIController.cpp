@@ -13,7 +13,7 @@
 
 AEliteAIController::AEliteAIController()
 {
-	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.bCanEverTick = true; // for packaged compatibility
 
 	// Don't create RLComponent here - will be created dynamically based on pawn type
 	RLComponent = nullptr;
@@ -85,17 +85,13 @@ void AEliteAIController::OnPossess(APawn* InPawn)
 
 	if (RLComponent)
 	{
-		// Sync hyperparameters from AI Controller to RL Component
+		// Initial hyperparameter sync only (they remain constant unless designer changes in editor)
 		RLComponent->Alpha = LearningRate;
 		RLComponent->Gamma = DiscountFactor;
-		RLComponent->Epsilon = ExplorationRate;
+		RLComponent->Epsilon = ExplorationRate; // starting epsilon
 		RLComponent->EpsilonDecayRate = ExplorationDecayRate;
 		RLComponent->MinActionDuration = ActionPersistenceDuration;
-
-		// Apply debug mode setting
 		RLComponent->bDebugMode = bEnableDebugMode;
-
-		// Initialize the component
 		RLComponent->Initialize(InPawn);
 	}
 }
@@ -112,14 +108,9 @@ void AEliteAIController::Tick(float DeltaTime)
 	if (!RLComponent)
 		return;
 
-	// Sync hyperparameters from AI Controller to RL Component (in case they were changed at runtime)
-	RLComponent->Alpha = LearningRate;
-	RLComponent->Gamma = DiscountFactor;
-	RLComponent->Epsilon = ExplorationRate;
+	// Only update values that may change at runtime (decay rate, persistence, debug flag)
 	RLComponent->EpsilonDecayRate = ExplorationDecayRate;
 	RLComponent->MinActionDuration = ActionPersistenceDuration;
-
-	// Update debug mode in case it was changed at runtime
 	if (RLComponent->bDebugMode != bEnableDebugMode)
 	{
 		RLComponent->bDebugMode = bEnableDebugMode;

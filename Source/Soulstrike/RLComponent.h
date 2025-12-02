@@ -234,6 +234,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
 	float AttackCooldown;
 
+	/** Explicit movement speed cache for debug & direct movement scaling */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
+	float MovementSpeed;
+
 protected:
 	// ========== INTERNAL STATE TRACKING ==========
 

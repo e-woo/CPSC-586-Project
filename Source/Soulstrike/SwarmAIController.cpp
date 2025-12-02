@@ -17,16 +17,10 @@ void ASwarmAIController::BeginPlay()
 {
 	LoadBP::LoadClass("/Game/ThirdPersonBP/Blueprints/SwarmAI/BP_SwarmEnemy.BP_SwarmEnemy_C", EnemyActorClass);
 
-	//FTimerDelegate SwarmTimerDelegate;
-	//FTimerHandle SwarmTimerHandle;
-
-	//SwarmTimerDelegate.BindUObject(this, &ASwarmAIController::MoveSwarms);
-	//GetWorldTimerManager().SetTimer(SwarmTimerHandle, SwarmTimerDelegate, 0.01f, true);
-
 	FTimerDelegate SwarmAttackTimerDelegate;
 	FTimerHandle SwarmAttackTimerHandle;
 
-	SwarmAttackTimerDelegate.BindUObject(this, &ASwarmAIController::ProcessSwarmAttacks);
+	SwarmAttackTimerDelegate.BindUObject(this, &ASwarmAIController::ProcessAttack);
 	GetWorldTimerManager().SetTimer(SwarmAttackTimerHandle, SwarmAttackTimerDelegate, 0.1f, true);
 	Super::BeginPlay();
 }
@@ -39,16 +33,16 @@ void ASwarmAIController::RegisterSwarmEnemy(APawn* InPawn, const FGuid& InSwarmI
 {
 	if (!InPawn) return;
 	this->SwarmId = InSwarmId;
-	UE_LOG(LogTemp, Warning, TEXT("Swarm Group: %s"), *InSwarmId.ToString());
+	//UE_LOG(LogTemp, Warning, TEXT("Swarm Group: %s"), *InSwarmId.ToString());
 	//UE_LOG(LogTemp, Warning, TEXT("Possessed Pawn: %s in Swarm Group: %s"), *InPawn->GetName(), *Last);
 	if (!SwarmMap.Contains(InSwarmId))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Creating new Swarm Group: %s"), *InSwarmId.ToString());
+		//UE_LOG(LogTemp, Warning, TEXT("Creating new Swarm Group: %s"), *InSwarmId.ToString());
 		SwarmMap.Add(InSwarmId, TArray<TWeakObjectPtr<ACharacter>>());
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Adding to existing Swarm Group: %s"), *InSwarmId.ToString());
+		//UE_LOG(LogTemp, Warning, TEXT("Adding to existing Swarm Group: %s"), *InSwarmId.ToString());
 	}
 
 	ACharacter* PawnChar = Cast<ACharacter>(InPawn);
@@ -66,11 +60,11 @@ void ASwarmAIController::OnUnPossess()
 
 void ASwarmAIController::Tick(float DeltaTime)
 {
-	MoveSwarms(DeltaTime);
+	ProcessMovement(DeltaTime);
 	Super::Tick(DeltaTime);
 }
 
-void ASwarmAIController::MoveSwarms(float DeltaTime)
+void ASwarmAIController::ProcessMovement(float DeltaTime)
 {
 	UWorld* World = GetWorld();
 	ACharacter* Player = UGameplayStatics::GetPlayerCharacter(World, 0);
@@ -155,7 +149,7 @@ void ASwarmAIController::MoveSwarms(float DeltaTime)
 	// Apply movement
 	Target->AddMovementInput(DesiredDir, DeltaTime * 600.f);
 	
-	DrawDebugLine(World, Target->GetActorLocation(), Target->GetActorLocation() + DesiredDir * 1000.f, FColor::Red, false, 0.1f, 0, 2.f);
+	//DrawDebugLine(World, Target->GetActorLocation(), Target->GetActorLocation() + DesiredDir * 1000.f, FColor::Red, false, 0.1f, 0, 2.f);
 
 
 	// Jump over obstacles
@@ -174,74 +168,72 @@ void ASwarmAIController::MoveSwarms(float DeltaTime)
 	}
 }
 
-void ASwarmAIController::ProcessSwarmAttacks()
+void ASwarmAIController::ProcessAttack()
 {
+	TWeakObjectPtr<ACharacter> Enemy = Cast<ACharacter>(GetPawn());
+	if (!Enemy.IsValid()) return;
+
 	UWorld* World = GetWorld();
+	if (!World) return;
+
 	ACharacter* Player = UGameplayStatics::GetPlayerCharacter(World, 0);
+	if (!Player) return;
 
-	if (!World || !Player) return;
+	float DistToPlayer = FVector::Dist(Enemy->GetActorLocation(), Player->GetActorLocation());
+	if (DistToPlayer > MaxAttackRange) return;
 
-	for (auto& Entry : SwarmMap)
+	if (WindingUpMap.Contains(Enemy) && WindingUpMap[Enemy]) return;
+
+	WindingUpMap.Add(Enemy, true);
+
+	FTimerHandle& AttackTimerHandle = ActiveWindupTimerMap.FindOrAdd(Enemy);
+	FTimerDelegate AttackTimerDelegate;
+
+	AttackTimerDelegate.BindUObject(this, &ASwarmAIController::OnAttackWindupComplete, Player);
+
+	GetWorldTimerManager().SetTimer(AttackTimerHandle, AttackTimerDelegate, AttackWindupDuration, false);
+
+	if (UFunction* AttackStartFunc = Enemy->FindFunction(FName("OnAttackStart")))
 	{
-		for (auto& Enemy : Entry.Value)
-		{
-			if (!Enemy.IsValid()) continue;
-			float DistToPlayer = FVector::Dist(Enemy->GetActorLocation(), Player->GetActorLocation());
-			if (DistToPlayer > MaxAttackRange) continue;
+		FAttackStartParams Params{};
+		Params.WindupDuration = AttackWindupDuration;
 
-
-			if (WindingUpMap.Contains(Enemy) && WindingUpMap[Enemy])
-				continue;
-
-			WindingUpMap.Add(Enemy, true);
-			FTimerHandle& AttackTimerHandle = ActiveWindupTimerMap.FindOrAdd(Enemy);
-
-			FTimerDelegate AttackTimerDelegate;
-
-			AttackTimerDelegate.BindUObject(this, &ASwarmAIController::OnAttackWindupComplete, Enemy.Get(), Player);
-
-			GetWorldTimerManager().SetTimer(AttackTimerHandle, AttackTimerDelegate, AttackWindupDuration, false);
-
-			UFunction* AttackStartFunc = Enemy->FindFunction(FName("OnAttackStart"));
-			if (AttackStartFunc)
-			{
-				FAttackStartParams Params{};
-				Params.WindupDuration = AttackWindupDuration;
-
-				Enemy->ProcessEvent(AttackStartFunc, &Params);
-			}
-		}
+		Enemy->ProcessEvent(AttackStartFunc, &Params);
 	}
 }
 
-void ASwarmAIController::OnAttackWindupComplete(ACharacter* Attacker, ACharacter* Target)
+void ASwarmAIController::OnAttackWindupComplete(ACharacter* Target)
 {
-	UWorld* World = GetWorld();
-	ACharacter* Player = UGameplayStatics::GetPlayerCharacter(World, 0);
+	if (!Target) return;
 
-	if (!World || !Player) return;
+	TWeakObjectPtr<ACharacter> Enemy = Cast<ACharacter>(GetPawn());
+	if (!Enemy.IsValid()) return;
+
+	UWorld* World = GetWorld();
+	if (!World) return;
 
 	// Clear windup flag
-	WindingUpMap.FindOrAdd(Attacker) = false;
+	WindingUpMap.FindOrAdd(Enemy) = false;
 
 	// Clear timer
-	if (ActiveWindupTimerMap.Contains(Attacker))
+	if (ActiveWindupTimerMap.Contains(Enemy))
 	{
-		GetWorldTimerManager().ClearTimer(ActiveWindupTimerMap[Attacker]);
+		GetWorldTimerManager().ClearTimer(ActiveWindupTimerMap[Enemy]);
 	}
 
-	float DistToPlayer = FVector::Dist(Attacker->GetActorLocation(), Player->GetActorLocation());
+	float DistToPlayer = FVector::Dist(Enemy->GetActorLocation(), Target->GetActorLocation());
 	if (DistToPlayer > MaxAttackRange)
 	{
+#if UE_EDITOR
 		UE_LOG(LogTemp, Warning, TEXT("%s: Attack missed! Player dodged out of range during windup (%.1f/%.1f)"),
-			*Attacker->GetName(), DistToPlayer, MaxAttackRange);
+			*Enemy->GetName(), DistToPlayer, MaxAttackRange);
+#endif
 		return;
 	}
-
 	AEnemyLogicManager* EnemyLogicMgr = Cast<AEnemyLogicManager>(UGameplayStatics::GetActorOfClass(World, AEnemyLogicManager::StaticClass()));
 
 	if (EnemyLogicMgr)
 	{
-		EnemyLogicMgr->ReportDamageToPlayer(Player, AttackDamage, Attacker);
+		EnemyLogicMgr->ReportDamageToPlayer(Target, AttackDamage, Enemy.Get());
 	}
 }
