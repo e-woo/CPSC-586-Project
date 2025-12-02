@@ -13,7 +13,7 @@
 
 AEliteAIController::AEliteAIController()
 {
-	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.bCanEverTick = true; // for packaged compatibility
 
 	// Don't create RLComponent here - will be created dynamically based on pawn type
 	RLComponent = nullptr;

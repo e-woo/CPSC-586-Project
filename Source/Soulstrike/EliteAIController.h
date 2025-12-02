@@ -24,6 +24,7 @@ protected:
 	virtual void OnUnPossess() override;
 
 public:
+	// We use tick since packaged version does not function properly using timers
 	virtual void Tick(float DeltaTime) override;
 
 	/** Reference to the RL Component that drives behavior */
