@@ -222,14 +222,14 @@ void ASwarmAIController::OnAttackWindupComplete(ACharacter* Target)
 	}
 
 	float DistToPlayer = FVector::Dist(Enemy->GetActorLocation(), Target->GetActorLocation());
-#if UE_EDITOR
 	if (DistToPlayer > MaxAttackRange)
 	{
+#if UE_EDITOR
 		UE_LOG(LogTemp, Warning, TEXT("%s: Attack missed! Player dodged out of range during windup (%.1f/%.1f)"),
 			*Enemy->GetName(), DistToPlayer, MaxAttackRange);
+#endif
 		return;
 	}
-#endif
 	AEnemyLogicManager* EnemyLogicMgr = Cast<AEnemyLogicManager>(UGameplayStatics::GetActorOfClass(World, AEnemyLogicManager::StaticClass()));
 
 	if (EnemyLogicMgr)
