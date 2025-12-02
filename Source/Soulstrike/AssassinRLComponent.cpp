@@ -3,8 +3,12 @@
 #include "GameFramework/Character.h"
 #include "Kismet/GameplayStatics.h"
 
+static bool GAssassinVerboseReward = true;
+
 void UAssassinRLComponent::UpdatePoisons(float DeltaTime)
 {
+	Super::UpdatePoisons(DeltaTime);
+
 	if (!OwnerCharacter)
 		return;
 
@@ -24,37 +28,27 @@ void UAssassinRLComponent::UpdatePoisons(float DeltaTime)
 		Poison.TimeSinceLastTick += DeltaTime;
 		Poison.RemainingDuration -= DeltaTime;
 
-		// Tick damage
 		if (Poison.TimeSinceLastTick >= Poison.TickInterval)
 		{
-			// Record DPS for RL
 			RecordDamageDealt(Poison.DamagePerTick);
-
-			// Report poison damage to Enemy Logic Manager
 			if (EnemyLogicMgr && Player)
 			{
 				EnemyLogicMgr->ReportDamageToPlayer(Player, Poison.DamagePerTick, OwnerCharacter);
-				UE_LOG(LogTemp, Log, TEXT("Assassin poison tick: %.0f damage"), Poison.DamagePerTick);
 			}
-			
 			Poison.TimeSinceLastTick = 0.0f;
 		}
 
-		// Remove expired poisons
 		if (Poison.RemainingDuration <= 0.0f)
 		{
 			ActivePoisons.RemoveAt(i);
-			UE_LOG(LogTemp, Log, TEXT("Assassin poison expired"));
 		}
 	}
 }
 
 void UAssassinRLComponent::OnAttackWindupComplete()
 {
-	// Call base implementation to handle damage
 	Super::OnAttackWindupComplete();
 
-	// Apply poison effect after successful hit
 	if (!OwnerCharacter)
 		return;
 
@@ -66,21 +60,15 @@ void UAssassinRLComponent::OnAttackWindupComplete()
 	if (!Player)
 		return;
 
-	// Check if player is in range (same check as base class)
 	float CurrentDistanceToPlayer = FVector::Dist(OwnerCharacter->GetActorLocation(), Player->GetActorLocation());
 	
 	if (CurrentDistanceToPlayer <= MaxAttackRange)
 	{
-		// Apply poison (90 damage over 3 seconds)
 		FPoisonEffect NewPoison;
 		NewPoison.RemainingDuration = 3.0f;
 		NewPoison.TickInterval = 0.5f;
-		NewPoison.DamagePerTick = 90.0f / (3.0f / 0.5f);  // 90 / 6 ticks = 15 per tick
-		NewPoison.TimeSinceLastTick = 0.0f;
-		
+		NewPoison.DamagePerTick = 15.0f; // 90 total over duration
 		ActivePoisons.Add(NewPoison);
-		
-		UE_LOG(LogTemp, Log, TEXT("Assassin: Applied poison (90 damage over 3s)"));
 	}
 }
 
@@ -89,68 +77,51 @@ float UAssassinRLComponent::CalculateReward()
 	if (!OwnerCharacter)
 		return 0.0f;
 
-	float Reward = 0.0f;
-
-	// Calculate distance delta (using actual distance stored in BuildState)
-	float PrevActualDistance = PreviousDistanceToPlayer * MaxAttackRange; // Convert normalized back
+	float DistNorm = CurrentState.DistanceToPlayer;
+	float PrevActualDistance = PreviousDistanceToPlayer * MaxAttackRange;
 	float DeltaDistance = ActualDistanceToPlayer - PrevActualDistance;
 
-	// === DISTANCE MANAGEMENT (Conditional on Poison State) ===
-	bool HasPoisonActive = HasActivePoisonOnPlayer();
+	bool bPoisonActive = HasActivePoisonOnPlayer();
+	bool bDiveBand = DistNorm <= 0.7f && !CurrentState.bIsBeyondMaxRange; // Go in for attack
+	bool bRetreatBand = DistNorm >= 0.9f && DistNorm <= 1.2f; // Retreat while debuff active
+	bool bTooFar = DistNorm > 1.3f;
 
-	if (CurrentState.bIsBeyondMaxRange)
+	float R_Dive=0,R_Retreat=0,R_Move=0,R_Attack=0,R_DPSBase=0,R_DPSDelta=0,R_Poison=0,R_Survive=0,R_Strafe=0,R_Camp=0;
+
+	if (bPoisonActive)
+		R_Retreat += bRetreatBand ? 1.0f : 0.f;
+	else
+		R_Dive += bDiveBand ? 0.8f : 0.f;
+
+	if (!bPoisonActive && !bDiveBand && DeltaDistance < 0.0f) R_Move += FMath::Min(0.4f, -DeltaDistance / MaxAttackRange * 2.0f);
+	if (bPoisonActive && DistNorm < 0.8f && DeltaDistance > 0.0f) R_Move += FMath::Min(0.4f, DeltaDistance / MaxAttackRange * 2.0f);
+
+	// Reward attacking when debuff not active
+	if (LastAction == EEliteAction::Primary_Attack)
 	{
-		// OUT OF RANGE: Force engagement
-		if (DeltaDistance < 0.0f) {  // Moving closer
-			Reward += -DeltaDistance * 0.05f;  // 50.0 per 1000 units = 0.05 per unit
-		} else if (DeltaDistance > 0.0f) {  // Moving away
-			Reward -= DeltaDistance * 0.05f;
-		} else {
-			Reward -= 5.0f;
-		}
-	}
-	else if (HasPoisonActive)
-	{
-		// POISON ACTIVE: Retreat and let it tick (hit-and-run)
-		if (DeltaDistance > 0.0f) {  // Moving away = good
-			Reward += DeltaDistance * 0.03f;  // 30.0 per 1000 units
-		} else if (DeltaDistance < 0.0f) {  // Still closing = bad
-			Reward += DeltaDistance * 0.02f;  // Penalty (negative)
-		}
-	}
-	else if (CanAttack())
-	{
-		// POISON EXPIRED + ATTACK READY: Dive back in
-		if (DeltaDistance < 0.0f) {  // Closing gap = good
-			Reward += -DeltaDistance * 0.025f;  // 25.0 per 1000 units
-		}
+		if (!bPoisonActive && bDiveBand && AttackState == EAttackState::Normal) R_Attack += 0.9f; else R_Attack -= 0.4f;
 	}
 
-	// === DPS REWARDS (High burst damage) ===
-	float CurrentDPS = GetAverageDPS();
-	float DeltaDPS = CurrentDPS - PreviousDPS;
+	// Reward DPS
+	float CurrentDPS = GetAverageDPS(); float DeltaDPS = CurrentDPS - PreviousDPS;
+	R_DPSBase += FMath::Clamp(CurrentDPS * 0.6f, 0.f, 1.2f);
+	R_DPSDelta += FMath::Clamp(DeltaDPS * 1.2f, -1.0f, 1.0f);
+	R_Poison += ActivePoisons.Num() * 0.3f;
 
-	// Base reward (highest multiplier for burst damage)
-	Reward += CurrentDPS * 3.0f;
-
-	// Delta bonus
-	Reward += DeltaDPS * 5.0f;
-
-	// === HEALTH MANAGEMENT ===
+	// Survival reward
 	float DeltaHealth = CurrentState.SelfHealthPercentage - PreviousState.SelfHealthPercentage;
-	Reward += DeltaHealth * 10.0f;
+	R_Survive += DeltaHealth * 2.0f;
+	if (CurrentState.bTookDamageRecently && !bPoisonActive && !bDiveBand) R_Survive -= 0.3f;
 
-	// === SMALL STATIC BONUSES ===
-	// Mobility (strafing = dodging)
-	if (LastAction == EEliteAction::Strafe_Left || LastAction == EEliteAction::Strafe_Right) {
-		Reward += 0.5f;
+	if (bDiveBand && (LastAction == EEliteAction::Strafe_Left || LastAction == EEliteAction::Strafe_Right)) R_Strafe += 0.3f;
+	if (bTooFar) R_Camp -= (DistNorm - 1.3f) * 0.8f;
+
+	float Reward = R_Dive + R_Retreat + R_Move + R_Attack + R_DPSBase + R_DPSDelta + R_Poison + R_Survive + R_Strafe + R_Camp;
+	LastReward = Reward;
+	if (bDebugMode && GAssassinVerboseReward)
+	{
+		UE_LOG(LogTemp, Verbose, TEXT("AssassinRewardComponents: Dive=%.2f Retreat=%.2f Move=%.2f Attack=%.2f DPS=%.2f dDPS=%.2f Poison=%.2f Survival=%.2f Strafe=%.2f Camp=%.2f Total=%.2f Dist=%.2f dDist=%.1f"),
+			R_Dive,R_Retreat,R_Move,R_Attack,R_DPSBase,R_DPSDelta,R_Poison,R_Survive,R_Strafe,R_Camp,Reward,DistNorm,DeltaDistance);
 	}
-
-	// Using allies as cover when retreating
-	if (HasPoisonActive && CurrentState.NumNearbyAllies > 0.2f &&
-		CurrentState.DistanceToClosestAlly < CurrentState.DistanceToPlayer) {
-		Reward += 1.0f;
-	}
-
 	return Reward;
 }

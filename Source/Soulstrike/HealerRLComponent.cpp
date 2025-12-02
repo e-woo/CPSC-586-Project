@@ -1,180 +1,61 @@
 #include "HealerRLComponent.h"
 #include "GameFramework/Character.h"
 
+static bool GHealerVerboseReward = true; // debugging
+
 void UHealerRLComponent::PerformSecondaryAttackOnElite()
 {
-	if (!OwnerCharacter)
-		return;
-
-	// Read HealAmount from Blueprint
-	FProperty* HealAmountProp = OwnerCharacter->GetClass()->FindPropertyByName(TEXT("HealAmount"));
-	float HealAmount = 50.0f; // Default
-	if (HealAmountProp)
-	{
-		float* HealAmountPtr = HealAmountProp->ContainerPtrToValuePtr<float>(OwnerCharacter);
-		if (HealAmountPtr)
-		{
-			HealAmount = *HealAmountPtr;
-		}
-	}
-
-	// Find lowest HP ally and heal them
-	TArray<ACharacter*> ClosestAllies;
-	FindClosestAllies(ClosestAllies, 3);
-
-	ACharacter* BestTarget = nullptr;
-	float LowestHP = 1.0f;
-
-	for (ACharacter* Ally : ClosestAllies)
-	{
-		if (Ally && Ally->IsValidLowLevel() && !Ally->IsPendingKillOrUnreachable() && 
-			IsCharacterAlive(Ally))
-		{
-			float AllyHP = GetCharacterHealthPercentage(Ally);
-			if (AllyHP < 0.9f && AllyHP < LowestHP)
-			{
-				float Distance = FVector::Dist(OwnerCharacter->GetActorLocation(), Ally->GetActorLocation());
-				if (Distance <= MaxAttackRange)
-				{
-					LowestHP = AllyHP;
-					BestTarget = Ally;
-				}
-			}
-		}
-	}
-
-	if (BestTarget && BestTarget->IsValidLowLevel() && !BestTarget->IsPendingKillOrUnreachable())
-	{
-		// Set attack state (before triggering animation)
-		AttackState = EAttackState::Attacking;
-		AttackTimer = 0.0f;
-		
-		// Trigger Blueprint custom event "OnSecondaryStart" with WindupDuration parameter
-		UFunction* SecondaryStartFunc = OwnerCharacter->FindFunction(FName("OnSecondaryStart"));
-		if (SecondaryStartFunc)
-		{
-			struct FSecondaryStartParams
-			{
-				float WindupDuration;
-			};
-			
-			FSecondaryStartParams Params;
-			Params.WindupDuration = AttackWindupDuration;
-			
-			OwnerCharacter->ProcessEvent(SecondaryStartFunc, &Params);
-		}
-
-		// Heal the ally
-		UClass* TargetClass = BestTarget->GetClass();
-		if (TargetClass && TargetClass->IsValidLowLevel())
-		{
-			FProperty* CurrentHealthProp = TargetClass->FindPropertyByName(TEXT("CurrentHealth"));
-			FProperty* MaxHealthProp = TargetClass->FindPropertyByName(TEXT("MaxHealth"));
-			if (CurrentHealthProp && MaxHealthProp)
-			{
-				float* CurrentHealthPtr = CurrentHealthProp->ContainerPtrToValuePtr<float>(BestTarget);
-				float* MaxHealthPtr = MaxHealthProp->ContainerPtrToValuePtr<float>(BestTarget);
-				if (CurrentHealthPtr && MaxHealthPtr)
-				{
-					*CurrentHealthPtr = FMath::Min(*MaxHealthPtr, *CurrentHealthPtr + HealAmount);
-				}
-			}
-		}
-		
-		RecordHealingDone(HealAmount);
-		UE_LOG(LogTemp, Log, TEXT("Healer: Healed %s for %.0f HP"), *BestTarget->GetName(), HealAmount);
-	}
-	else
-	{
-		UE_LOG(LogTemp, Log, TEXT("Healer: No valid heal target found"));
-	}
+	Super::PerformSecondaryAttackOnElite(); // heal
 }
 
 float UHealerRLComponent::CalculateReward()
 {
-	if (!OwnerCharacter)
-		return 0.0f;
-
-	float Reward = 0.0f;
-
-	// Calculate distance delta (using actual distance)
+	if (!OwnerCharacter) return 0.0f;
+	float DistNorm = CurrentState.DistanceToPlayer;
 	float PrevActualDistance = PreviousDistanceToPlayer * MaxAttackRange;
 	float DeltaDistance = ActualDistanceToPlayer - PrevActualDistance;
+	bool bSafeBand = DistNorm >= 0.85f;
+	bool bTooClose = DistNorm < 0.6f;
+	bool bDanger = DistNorm < 0.4f;
 
-	// === DISTANCE MANAGEMENT (Special Case for Healer) ===
-	if (CurrentState.bIsBeyondMaxRange)
-	{
-		// SPECIAL: Only penalize if ALSO out of range of allies
-		bool InRangeOfAlly = (CurrentState.DistanceToClosestAlly < 0.5f);
-		
-		if (!InRangeOfAlly)  // Out of range of BOTH player and allies = bad
-		{
-			if (DeltaDistance < 0.0f) {
-				Reward += -DeltaDistance * 0.05f;  // Move toward someone
-			} else if (DeltaDistance > 0.0f) {
-				Reward -= DeltaDistance * 0.05f;
-			} else {
-				Reward -= 5.0f;
-			}
-		}
-	}
-	else
-	{
-		// IN RANGE: Increase distance (backline safety)
-		if (DeltaDistance > 0.0f) {  // Moving away = good
-			Reward += DeltaDistance * 0.02f;  // 20.0 per 1000 units
-		} else if (DeltaDistance < 0.0f) {  // Getting closer = bad
-			Reward -= -DeltaDistance * 0.015f;  // 15.0 per 1000 units
-		}
-	}
+	float R_Pos=0,R_Move=0,R_HealBase=0,R_HealDelta=0,R_AttackPenalty=0,R_Survive=0,R_AllyNeed=0,R_Cover=0,R_DPSNeg=0;
 
-	// === HEALING REWARDS (DOMINANT) ===
-	float CurrentHPS = GetAverageHPS();
-	float DeltaHPS = CurrentHPS - PreviousHPS;
+	if (bSafeBand) R_Pos += 0.8f;
+	if (bTooClose) R_Pos -= (0.6f - DistNorm) * 1.0f;
+	if (bDanger) R_Pos -= 0.8f;
 
-	// Base reward for healing (3x multiplier - highest priority)
-	Reward += CurrentHPS * 3.0f;
+	// Stay "safe" (away from player) but prio healing
+	if (bTooClose && DeltaDistance > 0.0f) R_Move += FMath::Min(0.5f, DeltaDistance / MaxAttackRange * 2.0f);
+	if (bSafeBand && DeltaDistance > 0.0f && CurrentState.DistanceToClosestAlly > DistNorm) R_Move -= 0.2f; // drifting away from allies unnecessarily
 
-	// Delta bonus for healing
-	Reward += DeltaHPS * 5.0f;
+	// Reward healing
+	float CurrentHPS = GetAverageHPS(); float DeltaHPS = CurrentHPS - PreviousHPS;
+	R_HealBase += FMath::Clamp(CurrentHPS * 1.2f, 0.f, 2.0f);
+	R_HealDelta += FMath::Clamp(DeltaHPS * 2.0f, -1.5f, 1.5f);
 
-	// === DPS REWARDS (Lower priority) ===
+	// Don't want healer to attack often
 	float CurrentDPS = GetAverageDPS();
-	float DeltaDPS = CurrentDPS - PreviousDPS;
+	R_DPSNeg -= FMath::Clamp(CurrentDPS * 0.3f, 0.f, 1.0f);
+	if (LastAction == EEliteAction::Primary_Attack) R_AttackPenalty -= 0.5f;
+	if (LastAction == EEliteAction::Secondary_Attack && !bTooClose) R_HealBase += 0.6f;
 
-	Reward += CurrentDPS * 1.0f;  // Lower multiplier than healing
-	Reward += DeltaDPS * 5.0f;
-
-	// === HEALTH MANAGEMENT (Very high priority) ===
+	// Stay alive
 	float DeltaHealth = CurrentState.SelfHealthPercentage - PreviousState.SelfHealthPercentage;
-	Reward += DeltaHealth * 12.0f;  // Must stay alive to heal
+	R_Survive += DeltaHealth * 3.0f;
+	if (CurrentState.bTookDamageRecently) R_Survive -= 0.4f;
 
-	// === POSITIONING BONUSES ===
-	if (CurrentState.DistanceToPlayer > 0.7f)
-		Reward += 2.0f;  // Far from player
+	// Ally survival
+	float AvgAllyHealth = (CurrentState.HealthOfClosestAlly + CurrentState.HealthOfSecondClosestAlly + CurrentState.HealthOfThirdClosestAlly) / 3.0f;
+	if (AvgAllyHealth < 0.7f && CurrentState.NumNearbyAllies > 0.0f) R_AllyNeed += 0.6f;
+	if (CurrentState.NumNearbyAllies > 0.0f && CurrentState.DistanceToClosestAlly < DistNorm) R_Cover += 0.4f;
 
-	if (CurrentState.DistanceToPlayer < 0.3f)
-		Reward -= 3.0f;  // Penalty for too close
+	float Reward = R_Pos + R_Move + R_HealBase + R_HealDelta + R_AttackPenalty + R_Survive + R_AllyNeed + R_Cover + R_DPSNeg;
+	LastReward = Reward;
 
-	// Near injured allies (ready to heal)
-	float AvgAllyHealth = (CurrentState.HealthOfClosestAlly + 
-		CurrentState.HealthOfSecondClosestAlly + 
-		CurrentState.HealthOfThirdClosestAlly) / 3.0f;
-	
-	if (AvgAllyHealth < 0.7f && CurrentState.NumNearbyAllies > 0.2f) {
-		Reward += 2.0f;
+	if (bDebugMode && GHealerVerboseReward)
+	{
+		UE_LOG(LogTemp, Verbose, TEXT("HealerRewardComponents: Pos=%.2f Move=%.2f Heal=%.2f dHeal=%.2f AtkPen=%.2f Survive=%.2f AllyNeed=%.2f Cover=%.2f DPSNeg=%.2f Total=%.2f Dist=%.2f dDist=%.1f"),
+			R_Pos,R_Move,R_HealBase,R_HealDelta,R_AttackPenalty,R_Survive,R_AllyNeed,R_Cover,R_DPSNeg,Reward,DistNorm,DeltaDistance);
 	}
-
-	// Behind allies (safety)
-	if (CurrentState.NumNearbyAllies > 0.2f &&
-		CurrentState.DistanceToClosestAlly < CurrentState.DistanceToPlayer) {
-		Reward += 1.5f;
-	}
-
-	// Penalty for taking damage (should avoid combat)
-	if (CurrentState.bTookDamageRecently) {
-		Reward -= 1.0f;
-	}
-
 	return Reward;
 }

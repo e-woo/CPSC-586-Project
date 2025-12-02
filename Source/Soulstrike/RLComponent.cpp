@@ -286,16 +286,21 @@ void URLComponent::ExecuteRLStep(float DeltaTime)
 		Epsilon = FMath::Max(0.01f, Epsilon - (EpsilonDecayRate * DeltaTime));
 	}
 
+	// Capture previous step metrics BEFORE building new state
+	float PrevDistNorm = CurrentState.DistanceToPlayer;
+	float PrevDPSCapture = GetAverageDPS();
+	float PrevHPSCapture = GetAverageHPS();
+
 	// Save previous state
 	PreviousState = CurrentState;
 
 	// Build current state
 	CurrentState = BuildState();
 
-	// Store delta tracking values
-	PreviousDistanceToPlayer = CurrentState.DistanceToPlayer;
-	PreviousDPS = GetAverageDPS();
-	PreviousHPS = GetAverageHPS();
+	// Store delta tracking values using captured previous metrics
+	PreviousDistanceToPlayer = PrevDistNorm;
+	PreviousDPS = PrevDPSCapture;
+	PreviousHPS = PrevHPSCapture;
 
 	// If this is not the first step, update weights
 	if (PreviousState.SelfHealthPercentage > 0.0f)
@@ -689,17 +694,20 @@ void URLComponent::DebugDraw()
 	case EAttackState::OnCooldown: StateText += "Cooldown"; break;
 	}
 
+	// Show distance and recent reward
 	FString DebugText = FString::Printf(
-		TEXT("%s\nAction: %d\nReward: %.2f\nDist: %.2f\nHP: %.2f\nDPS: %.1f"),
+		TEXT("%s\nAction: %d\nR: %.2f\nDist: %.2f (%.0f/%0.f)\nHP: %.2f\nDPS: %.1f\nEps: %.2f"),
 		*StateText,
 		static_cast<int32>(LastAction),
 		LastReward,
 		CurrentState.DistanceToPlayer,
+		ActualDistanceToPlayer,
+		MaxAttackRange,
 		CurrentState.SelfHealthPercentage,
-		GetAverageDPS()
+		GetAverageDPS(),
+		Epsilon
 	);
 
-	// Draw with duration to persist between frames
 	DrawDebugString(GetWorld(), DebugLocation, DebugText, nullptr, FColor::Yellow, 0.1f, true);
 }
 

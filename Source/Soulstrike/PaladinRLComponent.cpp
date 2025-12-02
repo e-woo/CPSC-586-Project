@@ -1,92 +1,75 @@
 #include "PaladinRLComponent.h"
 #include "GameFramework/Character.h"
 
+static bool GPaladinVerboseReward = true; // debugging
+
 float UPaladinRLComponent::CalculateReward()
 {
 	if (!OwnerCharacter)
 		return 0.0f;
 
-	float Reward = 0.0f;
-
-	// Calculate distance delta (using actual distance)
+	float DistNorm = CurrentState.DistanceToPlayer;
 	float PrevActualDistance = PreviousDistanceToPlayer * MaxAttackRange;
 	float DeltaDistance = ActualDistanceToPlayer - PrevActualDistance;
+	bool bInFrontlineBand = (DistNorm >= 0.4f && DistNorm <= 0.8f && !CurrentState.bIsBeyondMaxRange);
+	bool bTooFar = DistNorm > 1.1f;
+	bool bTooClose = DistNorm < 0.3f;
 
-	// === DISTANCE MANAGEMENT ===
-	if (CurrentState.bIsBeyondMaxRange)
+	float R_Pos=0, R_Move=0, R_Attack=0, R_DPSBase=0, R_DPSDelta=0, R_Survive=0, R_Guard=0, R_Cohesion=0, R_Camping=0;
+
+	// Reward "frontlining" (tanking for other elites), stay close to player
+	R_Pos += bInFrontlineBand ? 1.0f : 0.0f;
+	if (bTooFar) R_Camping -= (DistNorm - 1.1f) * 0.8f;
+	if (bTooClose) R_Pos -= (0.3f - DistNorm) * 0.5f;
+
+	if (!bInFrontlineBand && DistNorm > 0.8f && DeltaDistance < 0.0f) R_Move += FMath::Min(0.4f, -DeltaDistance / MaxAttackRange * 2.0f);
+	if (!bInFrontlineBand && bTooClose && DeltaDistance > 0.0f) R_Move += FMath::Min(0.4f, DeltaDistance / MaxAttackRange * 2.0f);
+
+	// Reward melee attacks
+	if (LastAction == EEliteAction::Primary_Attack)
 	{
-		// OUT OF RANGE: Force engagement
-		if (DeltaDistance < 0.0f) {
-			Reward += -DeltaDistance * 0.05f;  // 50.0 per 1000 units
-		} else if (DeltaDistance > 0.0f) {
-			Reward -= DeltaDistance * 0.05f;
-		} else {
-			Reward -= 5.0f;
-		}
-	}
-	else
-	{
-		// IN RANGE: Paladin wants to move closer (frontline)
-		if (DeltaDistance < 0.0f) {  // Moving closer = good
-			Reward += -DeltaDistance * 0.01f;  // 10.0 per 1000 units
-		}
+		if (!CurrentState.bIsBeyondMaxRange && AttackState == EAttackState::Normal)
+			R_Attack += 0.7f; // reward melee swings
+		else
+			R_Attack -= 0.3f;
 	}
 
-	// === DPS REWARDS (Base + Delta Bonus) ===
+	// Reward DPS
 	float CurrentDPS = GetAverageDPS();
 	float DeltaDPS = CurrentDPS - PreviousDPS;
+	R_DPSBase += FMath::Clamp(CurrentDPS * 0.4f, 0.f, 0.8f);
+	R_DPSDelta += FMath::Clamp(DeltaDPS * 0.8f, -0.6f, 0.6f);
 
-	Reward += CurrentDPS * 1.5f;  // Moderate DPS multiplier
-	Reward += DeltaDPS * 5.0f;    // Delta bonus
-
-	// === HEALTH MANAGEMENT ===
+	// Stay alive
 	float DeltaHealth = CurrentState.SelfHealthPercentage - PreviousState.SelfHealthPercentage;
-	Reward += DeltaHealth * 10.0f;
+	R_Survive += DeltaHealth * 3.0f;
+	if (CurrentState.bTookDamageRecently && bInFrontlineBand) R_Survive += 0.4f;
 
-	// === HEALER PROTECTION (Dominant Feature) ===
-	TArray<ACharacter*> ClosestAllies;
-	FindClosestAllies(ClosestAllies, 3);
-
-	ACharacter* Healer = nullptr;
-	float DistanceToHealer = 9999.0f;
-	
-	for (ACharacter* Ally : ClosestAllies)
+	// Tnak/protect healer/archer
+	TArray<ACharacter*> Allies;
+	FindClosestAllies(Allies, 3);
+	for (ACharacter* Ally : Allies)
 	{
-		if (Ally && Ally->IsValidLowLevel() && !Ally->IsPendingKillOrUnreachable() && 
-			Ally->GetName().Contains("Healer"))
+		if (!Ally) continue;
+		FString N = Ally->GetName();
+		bool bProtectedType = N.Contains("Healer") || N.Contains("Archer");
+		if (bProtectedType)
 		{
-			Healer = Ally;
-			DistanceToHealer = FVector::Dist(OwnerCharacter->GetActorLocation(), Ally->GetActorLocation());
-			break;
+			float DistToAlly = FVector::Dist(OwnerCharacter->GetActorLocation(), Ally->GetActorLocation());
+			float PlayerToAlly = FVector::Dist(CachedPlayerLocation, Ally->GetActorLocation());
+			if (DistToAlly <= 700.0f && DistNorm * MaxAttackRange < PlayerToAlly) R_Guard += 0.7f;
 		}
 	}
 
-	if (Healer && Healer->IsValidLowLevel())
+	R_Cohesion += CurrentState.NumNearbyAllies * 0.2f;
+
+	float Reward = R_Pos + R_Move + R_Attack + R_DPSBase + R_DPSDelta + R_Survive + R_Guard + R_Cohesion + R_Camping;
+	LastReward = Reward;
+
+	if (bDebugMode && GPaladinVerboseReward)
 	{
-		// Reward for being between player and healer (bodyguard position)
-		float DistPlayerToHealer = FVector::Dist(CachedPlayerLocation, Healer->GetActorLocation());
-		float DistSelfToPlayer = ActualDistanceToPlayer;
-
-		if (DistanceToHealer < DistPlayerToHealer && DistSelfToPlayer < DistPlayerToHealer) {
-			Reward += 10.0f;  // Excellent bodyguard position
-		} else if (DistanceToHealer < 800.0f) {
-			Reward += 3.0f;  // Near healer
-		}
+		UE_LOG(LogTemp, Verbose, TEXT("PaladinRewardComponents: Pos=%.2f Move=%.2f Attack=%.2f DPS=%.2f dDPS=%.2f Survive=%.2f Guard=%.2f Cohesion=%.2f Camp=%.2f Total=%.2f Dist=%.2f dDist=%.1f"),
+			R_Pos, R_Move, R_Attack, R_DPSBase, R_DPSDelta, R_Survive, R_Guard, R_Cohesion, R_Camping, Reward, DistNorm, DeltaDistance);
 	}
-
-	// === FRONTLINE BONUSES ===
-	// Team cohesion
-	Reward += CurrentState.NumNearbyAllies * 1.0f;
-
-	// Frontline tanking
-	if (CurrentState.DistanceToPlayer < 0.4f) {
-		Reward += 2.0f;
-	}
-
-	// Taking damage (drawing aggro)
-	if (CurrentState.bTookDamageRecently) {
-		Reward += 1.0f;
-	}
-
 	return Reward;
 }
