@@ -69,12 +69,12 @@ void ADirector::TickDirector()
 	ReceiveSpawnCredits();
 	int BaseChance = 50 + PlayerCharacter->Level;
 
-	// Attempt to spawn enemies every 10 seconds
-	if (TickNum >= 4)
+	// Attempt to spawn enemies every 6 seconds
+	if (TickNum >= 6)
 	{
 		if (FMath::RandRange(1, 100) <= BaseChance + SpawnChanceBonus)
 		{
-			if (SpawnCredits >= EliteSpawnCost && FMath::RandRange(1, 100) <= 25 + SpawnEliteChanceBonus)
+			if (SpawnCredits >= EliteSpawnCost && FMath::RandRange(1, 100) <= 50 + SpawnEliteChanceBonus)
 			{
 				SpawnEliteEnemies();
 				SpawnEliteChanceBonus = 0;
@@ -108,7 +108,7 @@ void ADirector::ReceiveSpawnCredits()
 
 	Multiplier *= (1 - 0.16f * CountActors(AEliteEnemy::StaticClass()));
 
-	Multiplier *= FMath::Min(1.f, 20.f / (CountActors(EnemyActorClass) + 10));
+	Multiplier *= FMath::Min(1.f, 20.f / CountActors(EnemyActorClass));
 	UE_LOG(LogTemp, Display, TEXT("Current credit multiplier: %f"), Multiplier);
 
 	SpawnCredits += FMath::RoundToInt(BaseCreditAmountToReceive * Multiplier);
@@ -116,6 +116,12 @@ void ADirector::ReceiveSpawnCredits()
 
 void ADirector::SpawnSwarmEnemies()
 {
+	int MaxSwarmEnemyCount = 40;
+	if (CountActors(EnemyActorClass) >= MaxSwarmEnemyCount)
+	{
+		return;
+	}
+
 	int MinEnemyCount =
 		(PlayerCharacter->Level < 5) ? 3 :
 		(PlayerCharacter->Level < 10) ? 6 :
