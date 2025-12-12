@@ -799,10 +799,91 @@ void URLComponent::PerformPrimaryAttackOnElite()
 
 void URLComponent::PerformSecondaryAttackOnElite()
 {
-	// Base implementation does nothing
-	// Override in subclasses (e.g., HealerRLComponent) for specific behavior
-	UE_LOG(LogTemp, Log, TEXT("%s: Secondary attack (not implemented for this elite type)"), 
-		*OwnerCharacter->GetName());
+	if (!EliteBehavior || !OwnerCharacter)
+		return;
+
+	// For now, only Healer has secondary attack (heal)
+	if (EliteBehavior && EliteBehavior->IsA(AEliteHealer::StaticClass()))
+	{
+		// Read HealAmount from Blueprint
+		FProperty* HealAmountProp = OwnerCharacter->GetClass()->FindPropertyByName(TEXT("HealAmount"));
+		float HealAmount = 50.0f; // Default
+		if (HealAmountProp)
+		{
+			float* HealAmountPtr = HealAmountProp->ContainerPtrToValuePtr<float>(OwnerCharacter);
+			if (HealAmountPtr)
+			{
+				HealAmount = *HealAmountPtr;
+			}
+		}
+
+		// Find lowest HP ally and heal them
+		TArray<ACharacter*> ClosestAllies;
+		FindClosestAllies(ClosestAllies, 3);
+
+		ACharacter* BestTarget = nullptr;
+		float LowestHP = 1.0f;
+
+		for (ACharacter* Ally : ClosestAllies)
+		{
+			if (Ally && IsCharacterAlive(Ally))
+			{
+				float AllyHP = GetCharacterHealthPercentage(Ally);
+				if (AllyHP < 0.9f && AllyHP < LowestHP)
+				{
+					float Distance = FVector::Dist(OwnerCharacter->GetActorLocation(), Ally->GetActorLocation());
+					if (Distance <= MaxAttackRange)
+					{
+						LowestHP = AllyHP;
+						BestTarget = Ally;
+					}
+				}
+			}
+		}
+
+		if (BestTarget)
+		{
+			// Set attack state (before triggering animation)
+			AttackState = EAttackState::Attacking;
+			AttackTimer = 0.0f;
+			
+			// Trigger Blueprint custom event "OnSecondaryStart" with WindupDuration parameter
+			UFunction* SecondaryStartFunc = OwnerCharacter->FindFunction(FName("OnSecondaryStart"));
+			if (SecondaryStartFunc)
+			{
+				struct FSecondaryStartParams
+				{
+					float WindupDuration;
+				};
+				
+				FSecondaryStartParams Params;
+				Params.WindupDuration = AttackWindupDuration;
+				
+				OwnerCharacter->ProcessEvent(SecondaryStartFunc, &Params);
+			}
+
+			// Heal the ally
+			FProperty* CurrentHealthProp = BestTarget->GetClass()->FindPropertyByName(TEXT("CurrentHealth"));
+			FProperty* MaxHealthProp = BestTarget->GetClass()->FindPropertyByName(TEXT("MaxHealth"));
+			if (CurrentHealthProp && MaxHealthProp)
+			{
+				float* CurrentHealthPtr = CurrentHealthProp->ContainerPtrToValuePtr<float>(BestTarget);
+				float* MaxHealthPtr = MaxHealthProp->ContainerPtrToValuePtr<float>(BestTarget);
+				if (CurrentHealthPtr && MaxHealthPtr)
+				{
+					*CurrentHealthPtr = FMath::Min(*MaxHealthPtr, *CurrentHealthPtr + HealAmount);
+				}
+			}
+			
+			RecordHealingDone(HealAmount);
+			UE_LOG(LogTemp, Log, TEXT("Healer: Healed %s for %.0f HP"), *BestTarget->GetName(), HealAmount);
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Log, TEXT("%s: Secondary attack (not implemented for this elite type)"), 
+			*OwnerCharacter->GetName());
+	}
 }
 
 void URLComponent::OnAttackWindupComplete()
